@@ -1,0 +1,6 @@
+/* 全局默认样式，可按需扩展 */
+body {
+  margin: 0;
+  font-family: Inter, "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  background: #fff;
+}

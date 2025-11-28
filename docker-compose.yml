@@ -1,0 +1,22 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: system-monitor-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+
+  frontend:
+    build:
+      context: ./frontend/system-monitor-web
+    container_name: system-monitor-frontend
+    depends_on:
+      - backend
+    restart: unless-stopped
+    environment:
+      - VITE_API_BASE=/api
+    ports:
+      - "80:80"
