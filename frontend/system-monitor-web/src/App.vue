@@ -361,26 +361,79 @@ function initGauges() {
     }
     gaugeCpu = echarts.init(cpuGauge.value)
     gaugeCpu.setOption({
-      series: [{
-        type: 'gauge',
-        radius: '90%',
-        startAngle: 90,
-        endAngle: -269.9999,
-        pointer: { show: false },
-        progress: { show: true, roundCap: true, itemStyle: { color: '#165DFF' } },
-        axisLine: { lineStyle: { width: 8, color: [[1, '#E6F0FF']] } },
-        axisTick: { show: false },
-        splitLine: { show: false },
-        axisLabel: { show: false },
-        title: { show: false },
-        detail: {
-          valueAnimation: true,
-          formatter: v => formatSig(v) + '%',
-          color: '#1F2937',
-          fontSize: 18
+      animationDuration: 800,
+      animationDurationUpdate: 800,
+      animationEasing: 'cubicOut',
+      graphic: [{
+        type: 'circle',
+        left: 'center',
+        top: 'middle',
+        shape: { r: 40 },
+        style: {
+          fill: new echarts.graphic.RadialGradient(0.5, 0.5, 1, [
+            { offset: 0, color: 'rgba(22,93,255,0.10)' },
+            { offset: 1, color: 'rgba(22,93,255,0.02)' }
+          ])
         },
-        data: [{ value: 0 }]
-      }]
+        silent: true,
+        z: 0,
+        keyframeAnimation: {
+          duration: 2400,
+          loop: true,
+          keyframes: [
+            { percent: 0, shape: { r: 38 }, style: { opacity: 0.16 } },
+            { percent: 0.5, shape: { r: 42 }, style: { opacity: 0.28 } },
+            { percent: 1, shape: { r: 38 }, style: { opacity: 0.16 } }
+          ]
+        }
+      }],
+      series: [
+        {
+          id: 'cpuBase',
+          type: 'gauge',
+          radius: '92%',
+          startAngle: 90,
+          endAngle: -269.9999,
+          pointer: { show: false },
+          progress: { show: true, roundCap: true, itemStyle: { color: 'rgba(22,93,255,0.12)' } },
+          axisLine: { lineStyle: { width: 14, color: [[1, '#EEF4FF']] } },
+          axisTick: { show: false },
+          splitLine: { show: false },
+          axisLabel: { show: false },
+          title: { show: false },
+          detail: { show: false },
+          data: [{ value: 100 }],
+          animation: false,
+          z: 1
+        },
+        {
+          id: 'cpuValue',
+          type: 'gauge',
+          radius: '90%',
+          startAngle: 90,
+          endAngle: -269.9999,
+          pointer: { show: false },
+          anchor: { show: true, size: 8, itemStyle: { color: '#165DFF', shadowBlur: 8, shadowColor: 'rgba(22,93,255,0.35)' } },
+          progress: {
+            show: true,
+            roundCap: true,
+            itemStyle: {
+              color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                { offset: 0, color: '#40A9FF' },
+                { offset: 1, color: '#165DFF' }
+              ])
+            }
+          },
+          axisLine: { lineStyle: { width: 12, color: [[1, '#E6F0FF']] } },
+          axisTick: { show: false },
+          splitLine: { show: false },
+          axisLabel: { show: false },
+          title: { show: false },
+          detail: { show: false },
+          data: [{ value: 0 }],
+          z: 2
+        }
+      ]
     })
   }
 
@@ -390,36 +443,89 @@ function initGauges() {
     }
     gaugeMem = echarts.init(memGauge.value)
     gaugeMem.setOption({
-      series: [{
-        type: 'gauge',
-        radius: '90%',
-        startAngle: 90,
-        endAngle: -269.9999,
-        pointer: { show: false },
-        progress: { show: true, roundCap: true, itemStyle: { color: '#36D399' } },
-        axisLine: { lineStyle: { width: 8, color: [[1, '#ECFFF6']] } },
-        axisTick: { show: false },
-        splitLine: { show: false },
-        axisLabel: { show: false },
-        title: { show: false },
-        detail: {
-          valueAnimation: true,
-          formatter: v => formatSig(v) + '%',
-          color: '#1F2937',
-          fontSize: 18
+      animationDuration: 800,
+      animationDurationUpdate: 800,
+      animationEasing: 'cubicOut',
+      graphic: [{
+        type: 'circle',
+        left: 'center',
+        top: 'middle',
+        shape: { r: 40 },
+        style: {
+          fill: new echarts.graphic.RadialGradient(0.5, 0.5, 1, [
+            { offset: 0, color: 'rgba(54,211,153,0.10)' },
+            { offset: 1, color: 'rgba(54,211,153,0.02)' }
+          ])
         },
-        data: [{ value: 0 }]
-      }]
+        silent: true,
+        z: 0,
+        keyframeAnimation: {
+          duration: 2400,
+          loop: true,
+          keyframes: [
+            { percent: 0, shape: { r: 38 }, style: { opacity: 0.16 } },
+            { percent: 0.5, shape: { r: 42 }, style: { opacity: 0.28 } },
+            { percent: 1, shape: { r: 38 }, style: { opacity: 0.16 } }
+          ]
+        }
+      }],
+      series: [
+        {
+          id: 'memBase',
+          type: 'gauge',
+          radius: '92%',
+          startAngle: 90,
+          endAngle: -269.9999,
+          pointer: { show: false },
+          progress: { show: true, roundCap: true, itemStyle: { color: 'rgba(54,211,153,0.12)' } },
+          axisLine: { lineStyle: { width: 14, color: [[1, '#ECFFF6']] } },
+          axisTick: { show: false },
+          splitLine: { show: false },
+          axisLabel: { show: false },
+          title: { show: false },
+          detail: { show: false },
+          data: [{ value: 100 }],
+          animation: false,
+          z: 1
+        },
+        {
+          id: 'memValue',
+          type: 'gauge',
+          radius: '90%',
+          startAngle: 90,
+          endAngle: -269.9999,
+          pointer: { show: false },
+          anchor: { show: true, size: 8, itemStyle: { color: '#36D399', shadowBlur: 8, shadowColor: 'rgba(54,211,153,0.35)' } },
+          progress: {
+            show: true,
+            roundCap: true,
+            itemStyle: {
+              color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                { offset: 0, color: '#79E2B5' },
+                { offset: 1, color: '#36D399' }
+              ])
+            }
+          },
+          axisLine: { lineStyle: { width: 12, color: [[1, '#ECFFF6']] } },
+          axisTick: { show: false },
+          splitLine: { show: false },
+          axisLabel: { show: false },
+          title: { show: false },
+          detail: { show: false },
+          data: [{ value: 0 }],
+          z: 2
+        }
+      ]
     })
   }
 }
 
 function updateGauges() {
   if (gaugeCpu) {
-    gaugeCpu.setOption({ series: [{ data: [{ value: Number(kpisLarge[0].value || 0) }] }] })
+    gaugeCpu.setOption({ series: [{ id: 'cpuValue', data: [{ value: Number(kpisLarge[0].value || 0) }] }] })
   }
   if (gaugeMem) {
-    gaugeMem.setOption({ series: [{ data: [{ value: Number(kpisLarge[1].value || 0) }] }] })
+    gaugeMem.setOption({ series: [{ id: 'memValue', data: [{ value: Number(kpisLarge[1].value || 0) }] }] })
   }
 }
 
