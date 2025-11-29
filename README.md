@@ -1,88 +1,114 @@
-# System Monitor
+# System Monitor & Security Awareness Dashboard
 
-面向服务器 / 工作站的实时监控仪表盘。后端使用 **Go + Gin + gopsutil** 采集系统指标，前端采用 **Vue 3 + Vite + Element Plus + ECharts** 渲染大屏图表，支持 Docker Compose 一键部署。
+面向服务器 / 工作站的实时监控与网络安全态势感知仪表盘。后端使用 **Go + Gin + gopsutil** 采集系统指标及网络连接信息，前端采用 **Vue 3 + Vite + Element Plus + ECharts** 渲染动态大屏，支持 Docker Compose 一键部署。
 
 ## 功能亮点
 
-- **实时采集**：每秒采集 CPU、内存、磁盘 I/O、网络流量、系统信息等关键指标，采集逻辑位于 `backend/metrics`（@backend/metrics/collector.go#17-299）。
-- **告警日志**：CPU/内存超阈值时生成告警，保留最近 200 条历史。
-- **网络流量记录**：带宽超过约 1 MB/s 即记录当时各网卡的上下行速率。
-- **前端大屏**：Vue 3 + Element Plus + ECharts 构建的动态仪表盘（@frontend/system-monitor-web/src/App.vue#250-340）。
+- **全方位实时采集**：
+  - 基础资源：CPU、内存、磁盘 I/O、文件系统使用率。
+  - 网络流量：实时上下行速率、总流量统计。
+  - **安全态势**：
+    - **深度审计**：实时关联活跃连接的 **进程名称**、**远程 IP**、**地理位置** (国家/城市) 及端口信息。
+    - **威胁感知**：流量突发或定时触发连接快照，有效捕获潜在的恶意通信（如 C2 心跳）。
+    - **可视化热力图**：通过 **GeoIP** 绘制全球连接热力分布，直观定位威胁来源。
+  - 进程监控：Top CPU/Memory 进程实时追踪。
+- **实时数据流 (SSE)**：采用 Server-Sent Events (SSE) 技术，实现秒级数据推送，告别传统轮询，降低延迟。
+- **智能告警工作台**：
+  - 可配置的 CPU/内存/磁盘 阈值。
+  - 告警历史记录与分页查询。
+  - **网络审计日志**：详细记录异常流量时刻的连接快照。
+- **可视化大屏**：
+  - 动态仪表盘：CPU/内存/磁盘 仪表盘（支持动画与渐变效果）。
+  - 趋势图表：ECharts 绘制流量趋势、负载变化。
+  - **地理视图**：全球地图热力分布，直观展示外部连接活跃区域。
 
 ## 项目结构
 
 ```
 .
-├─backend/                 # Go 后端（Gin + gopsutil）
-│  ├─main.go               # 入口：提供 /api/dashboard（@backend/main.go#1-22）
-│  ├─metrics/              # 指标采集逻辑
+├─backend/                 # Go 后端（Gin + gopsutil + GeoIP2）
+│  ├─main.go               # 入口：提供 REST API 及 SSE 流
+│  ├─metrics/              # 指标采集与告警逻辑
+│  ├─GeoLite2-City.mmdb    # (需自行下载) MaxMind GeoIP 数据库
 │  └─Dockerfile            # 多阶段构建
 ├─frontend/
 │  └─system-monitor-web/   # Vue 3 + Vite 前端
-│     ├─src/               # 前端源码
+│     ├─src/               # 前端源码 (App.vue, components, assets)
 │     ├─Dockerfile         # Node 构建 + Nginx 托管
-│     └─nginx.conf         # 将 /api/* 代理至 backend（@frontend/system-monitor-web/nginx.conf#1-18）
+│     └─nginx.conf         # 生产环境反向代理配置
 └─docker-compose.yml       # 前后端一键编排
 ```
 
-## 本地开发
+## 快速开始
 
-### 环境要求
-- Go 1.23+
-- Node.js 18+（含 npm）
-- 可选：Docker 24+、Docker Compose V2
+### 1. 准备 GeoIP 数据库 (必需)
+本项目使用 MaxMind GeoLite2 数据库进行 IP 地理定位。
+1. 访问 [MaxMind 官网](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data) 注册并下载 `GeoLite2-City.mmdb`。
+2. 将 `.mmdb` 文件放置在 `backend/` 目录下，或在运行时通过环境变量指定路径。
 
-### 启动后端
+### 2. 本地开发
+
+#### 后端启动
 ```bash
 cd backend
+# 安装依赖
 go mod download
-go run .            # 默认监听 :8080
+# 设置环境变量（可选，默认值如下）
+export GEOIP_DB_PATH="./GeoLite2-City.mmdb"
+export ALERT_CPU_THRESHOLD=80
+export ALERT_MEM_THRESHOLD=80
+export ALERT_DISK_THRESHOLD=90
+# 运行
+go run .
 ```
+后端默认监听 `:8080`。
 
-### 启动前端
+#### 前端启动
 ```bash
 cd frontend/system-monitor-web
 npm install
-npm run dev        # 默认 http://localhost:5173
+npm run dev
 ```
+前端默认访问 `http://localhost:5173`。开发环境下 `vite.config.js` 已配置代理，将 `/api` 请求转发至本地后端。
 
-开发态下，Vite 在 `vite.config.js` 中配置了 `/api` 代理到 `http://localhost:8080`（@frontend/system-monitor-web/vite.config.js#1-15），可直接联调。
+### 3. Docker / Compose 部署
 
-## Docker / Compose 部署
-
-根目录提供 `docker-compose.yml`，结合现有 Dockerfile 可一键构建、运行：
+根目录提供 `docker-compose.yml`，一键启动所有服务。
 
 ```bash
-# 构建镜像
-docker compose build
+# 1. 确保 GeoLite2-City.mmdb 已放入 backend/ 目录
 
-# 后台启动
-docker compose up -d
+# 2. 构建并启动
+docker compose up -d --build
 
-# 查看日志
+# 3. 查看日志
 docker compose logs -f
-
-# 停止并清理
-docker compose down
 ```
 
-- `backend` 镜像由 `backend/Dockerfile` 构建，暴露 `8080`（@backend/Dockerfile#1-30）。
-- `frontend` 镜像由 `frontend/system-monitor-web/Dockerfile` 构建，Nginx 监听 `80`，并将 `/api/*` 转发到 `backend:8080`。
-- Compose V2 会提示 `version` 字段已弃用，如无需要可删除该字段，不影响运行。
+访问 `http://<服务器IP>/` 即可查看仪表盘。
 
-访问 `http://<服务器IP>/` 即可查看仪表盘（默认映射宿主 80 端口）。
+## 配置说明 (环境变量)
 
-## API 摘要
+支持通过环境变量调整系统行为（可在 `docker-compose.yml` 或 shell 中设置）：
 
-| 方法 | 路径             | 描述         |
-| ---- | ---------------- | ------------ |
-| GET  | `/api/dashboard` | 返回实时指标 |
+| 变量名 | 默认值 | 说明 |
+| :--- | :--- | :--- |
+| `PORT` | `8080` | 后端服务端口 |
+| `GEOIP_DB_PATH` | `./GeoLite2-City.mmdb` | GeoIP 数据库文件路径 |
+| `ALERT_CPU_THRESHOLD` | `80` | CPU 告警阈值 (%) |
+| `ALERT_MEM_THRESHOLD` | `80` | 内存告警阈值 (%) |
+| `ALERT_DISK_THRESHOLD` | `90` | 磁盘告警阈值 (%) |
 
-响应结构定义在 `backend/metrics/collector.go` 的 `DashboardData`，包含 CPU、内存、磁盘、网络、告警、网络日志等数据。
+## API 接口
 
-## 参考
+| 方法 | 路径 | 描述 |
+| :--- | :--- | :--- |
+| **GET** | `/api/stream` | **SSE** 实时数据流，推送完整监控数据 |
+| **GET** | `/api/dashboard` | 获取当前快照数据 (JSON) |
+| **GET** | `/api/alerts` | 获取分页告警历史 (Query: `page`, `size`) |
 
-- [Gin](https://gin-gonic.com/)
-- [gopsutil](https://github.com/shirou/gopsutil)
-- [Vue 3 / Vite](https://vitejs.dev/)
-- [ECharts](https://echarts.apache.org/)
+## 技术栈
+
+- **Backend**: Go, Gin, gopsutil, geoip2-golang
+- **Frontend**: Vue 3, Vite, Element Plus, ECharts 5, Axios
+- **Deployment**: Docker, Docker Compose, Nginx

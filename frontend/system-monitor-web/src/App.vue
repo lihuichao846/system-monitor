@@ -139,15 +139,14 @@
             <!-- 网络日志 -->
             <div class="netlog-block">
               <div class="netlog-header">
-                <span>网络流量日志</span>
-                <span class="netlog-sub">最近 {{ dashboard.net_log?.length || 0 }} 条 · 单位 KB/s</span>
+                <span>网络审计日志 (Security Audit)</span>
+                <span class="netlog-sub">最近 {{ dashboard.net_log?.length || 0 }} 条 · 流量触发或定时快照</span>
               </div>
               <div class="netlog-table">
                 <div class="netlog-row netlog-row--head">
                   <span>时间</span>
-                  <span>下行 Rx</span>
-                  <span>上行 Tx</span>
-                  <span>详细接口</span>
+                  <span>流量 (Rx / Tx)</span>
+                  <span>活跃连接审计 (Remote → Local | Process)</span>
                 </div>
                 <div
                   v-for="(item, idx) in (dashboard.net_log || []).slice().reverse()"
@@ -155,10 +154,23 @@
                   class="netlog-row"
                 >
                   <span>{{ item.time }}</span>
-                  <span>{{ formatSig(item.rx) }}</span>
-                  <span>{{ formatSig(item.tx) }}</span>
+                  <span>↓{{ formatSig(item.rx) }} / ↑{{ formatSig(item.tx) }}</span>
                   <span class="netlog-detail">
-                    <template v-if="item.interfaces && item.interfaces.length">
+                    <template v-if="item.connections && item.connections.length">
+                      <div v-for="(c, k) in item.connections.slice(0, 4)" :key="k" class="audit-item">
+                        <span class="audit-ip" :title="c.country + ' ' + c.city">
+                           {{ c.remote_ip }}
+                           <span class="audit-loc" v-if="c.country && c.country!=='-'">({{ c.country }})</span>
+                        </span>
+                        <span class="audit-arrow">→</span>
+                        <span class="audit-port">{{ c.local_port }}</span>
+                        <span class="audit-proc" v-if="c.process && c.process!=='unknown'">[{{ c.process }}]</span>
+                      </div>
+                      <div v-if="item.connections.length > 4" class="audit-more">
+                        ... 共 {{ item.connections.length }} 个活跃连接
+                      </div>
+                    </template>
+                    <template v-else-if="item.interfaces && item.interfaces.length">
                       <span
                         v-for="(ni, j) in item.interfaces.slice(0,3)"
                         :key="j"
@@ -166,12 +178,9 @@
                       >
                         {{ ni.interface }}: ↓{{ formatSig(ni.rx) }} / ↑{{ formatSig(ni.tx) }}
                       </span>
-                      <span v-if="item.interfaces.length > 3" class="netlog-more">
-                        … 等 {{ item.interfaces.length }} 个接口
-                      </span>
                     </template>
                     <template v-else>
-                      -
+                      <span style="color:var(--text-sub)">无活跃外部连接</span>
                     </template>
                   </span>
                 </div>
@@ -187,16 +196,45 @@
         <template v-else-if="active === 'alert'">
           <section class="alert-center card">
             <div class="quick-title">告警中心</div>
-            <div v-if="alertsHistory.length === 0" class="alert-empty">暂无历史告警</div>
-            <div v-else class="alert-list">
-              <div v-for="(a, i) in alertsHistory" :key="i" class="alert-item card-alert">
-                <div class="status" :style="{ background: statusColor(a.level) }"></div>
-                <div class="alert-body">
-                  <div class="alert-text">{{ a.text }}</div>
-                  <div class="alert-time">{{ a.time }}</div>
-                </div>
-              </div>
+            <div style="margin-bottom:8px;display:flex;justify-content:flex-end;">
+              <el-pagination
+                background
+                layout="prev, pager, next"
+                :page-size="alertTable.pageSize"
+                :total="alertTable.total"
+                :current-page="alertTable.page"
+                @current-change="onAlertPageChange"
+              />
             </div>
+            <div v-if="alertTable.items.length===0 && alertsHistory.length===0" class="alert-empty">暂无历史告警</div>
+            <div v-else class="alert-list">
+              <template v-if="alertTable.items.length>0">
+                <div v-for="(a, i) in alertTable.items" :key="i" class="alert-item card-alert">
+                  <div class="status" :style="{ background: statusColor(a.level) }"></div>
+                  <div class="alert-body">
+                    <div class="alert-text">{{ a.text }}</div>
+                    <div class="alert-time">{{ a.time }}</div>
+                  </div>
+                </div>
+              </template>
+              <template v-else>
+                <div v-for="(a, i) in alertsHistory" :key="i" class="alert-item card-alert">
+                  <div class="status" :style="{ background: statusColor(a.level) }"></div>
+                  <div class="alert-body">
+                    <div class="alert-text">{{ a.text }}</div>
+                    <div class="alert-time">{{ a.time }}</div>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </section>
+        </template>
+
+        <!-- 地理视图 -->
+        <template v-else-if="active === 'geo'">
+          <section class="geo-center card" style="height:100%;display:flex;flex-direction:column;">
+            <div class="quick-title">地理视图</div>
+            <div ref="geoMap" style="flex:1;min-height:400px;"></div>
           </section>
         </template>
       </el-main>
@@ -242,12 +280,15 @@ const active = ref('device')
 const menu = [
   { key: 'device', title: '设备监测', icon: 'M3 3h18v18H3z' },
   { key: 'perf', title: '性能统计', icon: 'M12 3L21 21H3L12 3z' },
-  { key: 'alert', title: '告警中心', icon: 'M12 22c5.5 0 10-4.5 10-10S17.5 2 12 2 2 6.5 2 12s4.5 10 10 10z' }
+  { key: 'alert', title: '告警中心', icon: 'M12 22c5.5 0 10-4.5 10-10S17.5 2 12 2 2 6.5 2 12s4.5 10 10 10z' },
+  { key: 'geo', title: '地理视图', icon: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z' }
 ]
 const hasUnread = ref(false)
 // 告警日志 + 当前实时告警
 const alertsHistory = ref([])
 const currentAlerts = ref([])
+
+const alertTable = reactive({ items: [], total: 0, pageSize: 20, page: 1 })
 
 const dashboard = reactive({
   cpu: { usage: 0, per_core: [] },
@@ -256,7 +297,8 @@ const dashboard = reactive({
   network: [],
   system: {},
   perf: {},
-  net_log: []
+  net_log: [],
+  geo_heat: []
 })
 
 // KPI placeholders (will be updated each fetch)
@@ -272,12 +314,15 @@ const currentFlow = ref(0)
 const flowPeak = ref(0)
 
 // chart instances
-let gaugeCpu, gaugeMem, flowChart
+let gaugeCpu, gaugeMem, flowChart, mapChart
 
 // refs
 const cpuGauge = ref(null)
 const memGauge = ref(null)
 const flowChartRef = ref(null)
+const geoMap = ref(null)
+let pollTimerId = null
+let sse = null
 
 // helper: format to 2 significant digits (returns string)
 function formatSig(v) {
@@ -316,41 +361,95 @@ async function fetchData() {
   try {
     const res = await axios.get('/api/dashboard')
     const d = res.data
-
-    // defensively map backend fields to our dashboard structure
-    dashboard.cpu = d.cpu || dashboard.cpu
-    dashboard.memory = d.memory || dashboard.memory
-    dashboard.disk = d.disk || dashboard.disk
-    dashboard.network = d.network || dashboard.network
-    dashboard.system = d.system || dashboard.system
-    dashboard.perf = d.perf || dashboard.perf
-    dashboard.net_log = d.net_log || dashboard.net_log
-
-    kpisLarge[0].value = dashboard.cpu.usage || 0
-    kpisLarge[1].value = dashboard.memory.used_percent || 0
-
-    // total network (KB/s)
-    const totalNet = (dashboard.network || []).reduce((s, n) => s + (n.rx || 0) + (n.tx || 0), 0)
-    const normalizedNet = Number(totalNet)
-    flowHistory.value.push(normalizedNet)
-    if (flowHistory.value.length > 120) flowHistory.value.shift()
-    const timeLabel = new Date().toLocaleTimeString('zh-CN', { hour12: false })
-    flowLabels.value.push(timeLabel)
-    if (flowLabels.value.length > 120) flowLabels.value.shift()
-    currentFlow.value = normalizedNet
-    flowPeak.value = Math.max(flowPeak.value, normalizedNet)
-
-    // alerts mapping: d.alerts 为历史日志, d.current_alerts 为当前周期告警
-    alertsHistory.value = d.alerts || []
-    currentAlerts.value = d.current_alerts || []
-
-    // update charts
-    updateGauges()
-    updateFlowChart()
+    applyDashboard(d)
   } catch (e) {
     // do not spam console in production
     console.warn('fetch error', e)
   }
+}
+
+function applyDashboard(d) {
+  dashboard.cpu = d.cpu || dashboard.cpu
+  dashboard.memory = d.memory || dashboard.memory
+  dashboard.disk = d.disk || dashboard.disk
+  dashboard.network = d.network || dashboard.network
+  dashboard.system = d.system || dashboard.system
+  dashboard.perf = d.perf || dashboard.perf
+  dashboard.net_log = d.net_log || dashboard.net_log
+  dashboard.geo_heat = d.geo_heat || []
+
+  kpisLarge[0].value = dashboard.cpu.usage || 0
+  kpisLarge[1].value = dashboard.memory.used_percent || 0
+
+  const totalNet = (dashboard.network || []).reduce((s, n) => s + (n.rx || 0) + (n.tx || 0), 0)
+  const normalizedNet = Number(totalNet)
+  flowHistory.value.push(normalizedNet)
+  if (flowHistory.value.length > 120) flowHistory.value.shift()
+  const timeLabel = new Date().toLocaleTimeString('zh-CN', { hour12: false })
+  flowLabels.value.push(timeLabel)
+  if (flowLabels.value.length > 120) flowLabels.value.shift()
+  currentFlow.value = normalizedNet
+  flowPeak.value = Math.max(flowPeak.value, normalizedNet)
+
+  alertsHistory.value = d.alerts || []
+  currentAlerts.value = d.current_alerts || []
+
+  updateGauges()
+  updateFlowChart()
+  updateGeoMap()
+}
+
+function startPolling() {
+  if (!pollTimerId) pollTimerId = setInterval(fetchData, 1000)
+}
+
+function stopPolling() {
+  if (pollTimerId) { clearInterval(pollTimerId); pollTimerId = null }
+}
+
+function initSSE() {
+  const urls = ['/api/stream', 'http://localhost:8080/api/stream']
+  let idx = 0
+  function connect() {
+    try {
+      const es = new EventSource(urls[idx])
+      sse = es
+      es.onopen = () => { stopPolling() }
+      es.onmessage = (ev) => {
+        try {
+          const payload = JSON.parse(ev.data || '{}')
+          applyDashboard(payload)
+        } catch {}
+      }
+      es.onerror = () => {
+        try { es.close() } catch {}
+        sse = null
+        idx = Math.min(idx + 1, urls.length - 1)
+        startPolling()
+        setTimeout(connect, 2000)
+      }
+    } catch {
+      startPolling()
+      setTimeout(connect, 2000)
+    }
+  }
+  connect()
+}
+
+async function fetchAlertsPage() {
+  try {
+    const limit = alertTable.pageSize
+    const offset = (alertTable.page - 1) * limit
+    const res = await axios.get('/api/alerts', { params: { limit, offset } })
+    const d = res.data || {}
+    alertTable.items = d.items || []
+    alertTable.total = d.total || 0
+  } catch (e) {}
+}
+
+function onAlertPageChange(p) {
+  alertTable.page = p
+  fetchAlertsPage()
 }
 
 function initGauges() {
@@ -585,6 +684,120 @@ function initFlowChart() {
   }
 }
 
+async function initGeoMap() {
+  if (!geoMap.value) return
+  
+  // 检查 echarts 是否已注册 world 地图，未注册则加载
+  if (!echarts.getMap('world')) {
+    try {
+      const res = await axios.get('https://fastly.jsdelivr.net/npm/echarts@4.9.0/map/json/world.json')
+      echarts.registerMap('world', res.data)
+    } catch (e) {
+      console.error('Failed to load world map', e)
+      return
+    }
+  }
+
+  if (mapChart) {
+    mapChart.dispose()
+  }
+
+  mapChart = echarts.init(geoMap.value)
+  mapChart.setOption({
+    backgroundColor: 'transparent',
+    title: {
+      text: '外部连接热力分布',
+      subtext: '基于当前活跃的网络连接 IP 进行地理定位',
+      left: 'center',
+      textStyle: { color: '#1f2937' },
+      subtextStyle: { color: '#6b7280' }
+    },
+    tooltip: {
+      trigger: 'item',
+      formatter: function (params) {
+        const v = params.data
+        if (!v) return ''
+        return `${v.name}: ${v.count} 个连接`
+      }
+    },
+    visualMap: {
+      min: 0,
+      max: 20,
+      calculable: true,
+      inRange: {
+        color: ['#50a3ba', '#eac736', '#d94e5d']
+      },
+      textStyle: { color: '#1f2937' }
+    },
+    geo: {
+      map: 'world',
+      roam: true,
+      itemStyle: {
+        areaColor: '#f3f4f6',
+        borderColor: '#9ca3af'
+      },
+      emphasis: {
+        itemStyle: {
+          areaColor: '#d1d5db'
+        }
+      }
+    },
+    series: [
+      {
+        name: 'Connections',
+        type: 'heatmap',
+        coordinateSystem: 'geo',
+        data: []
+      },
+      {
+        name: 'Top 5',
+        type: 'effectScatter',
+        coordinateSystem: 'geo',
+        data: [],
+        symbolSize: function (val) {
+          return Math.min(Math.max(val[2], 5), 20);
+        },
+        showEffectOn: 'render',
+        rippleEffect: {
+          brushType: 'stroke'
+        },
+        label: {
+          formatter: '{b}',
+          position: 'right',
+          show: true
+        },
+        itemStyle: {
+          color: '#f4e925',
+          shadowBlur: 10,
+          shadowColor: '#333'
+        },
+        zlevel: 1
+      }
+    ]
+  })
+  updateGeoMap()
+}
+
+function updateGeoMap() {
+  if (!mapChart) return
+  const data = (dashboard.geo_heat || []).map(item => {
+    return {
+      name: item.city || item.country,
+      value: [item.lon, item.lat, item.count],
+      country: item.country,
+      city: item.city,
+      count: item.count
+    }
+  })
+  
+  mapChart.setOption({
+    series: [
+      { data: data },
+      { data: data.sort((a, b) => b.count - a.count).slice(0, 5) }
+    ]
+  })
+}
+
 function updateFlowChart() {
   if (!flowChart) return
   flowChart.setOption({
@@ -617,13 +830,15 @@ onMounted(() => {
 
   // initial fetch + start polling
   fetchData()
-  setInterval(fetchData, 1000)
+  startPolling()
+  initSSE()
 
   // window resize -> charts resize
   window.addEventListener('resize', () => {
     gaugeCpu && gaugeCpu.resize && gaugeCpu.resize()
     gaugeMem && gaugeMem.resize && gaugeMem.resize()
     flowChart && flowChart.resize && flowChart.resize()
+    mapChart && mapChart.resize && mapChart.resize()
   })
 })
 
@@ -632,6 +847,14 @@ watch(active, async (val) => {
   if (val === 'device') {
     await nextTick()
     setupDeviceCharts()
+  }
+  if (val === 'alert') {
+    await nextTick()
+    fetchAlertsPage()
+  }
+  if (val === 'geo') {
+    await nextTick()
+    initGeoMap()
   }
 })
 </script>
@@ -816,15 +1039,26 @@ watch(active, async (val) => {
 .netlog-block { margin-top:16px; border-top:1px dashed var(--border); padding-top:12px; }
 .netlog-header { display:flex; justify-content:space-between; align-items:center; font-size:13px; color:var(--text-sub); margin-bottom:6px; }
 .netlog-sub { font-size:12px; }
-.netlog-table { max-height:220px; overflow:auto; border-radius:8px; border:1px solid var(--border); background:#FFFFFF; }
-.netlog-row { display:grid; grid-template-columns:90px 80px 80px 1fr; padding:6px 10px; font-size:12px; color:var(--text-sub); column-gap:6px; align-items:flex-start; }
-.netlog-row span:last-child { text-align:right; }
-.netlog-row--head { background:#F3F4F6; font-weight:600; color:var(--text-main); position:sticky; top:0; z-index:1; }
+.netlog-table { max-height:280px; overflow:auto; border-radius:8px; border:1px solid var(--border); background:#FFFFFF; }
+.netlog-row { display:grid; grid-template-columns:90px 150px 1fr; padding:8px 10px; font-size:12px; color:var(--text-sub); column-gap:8px; align-items:flex-start; border-bottom:1px solid rgba(0,0,0,0.02); }
+.netlog-row:last-child { border-bottom:none; }
+.netlog-row span:last-child { text-align:left; }
+.netlog-row--head { background:#F3F4F6; font-weight:600; color:var(--text-main); position:sticky; top:0; z-index:1; border-bottom:1px solid var(--border); }
 .netlog-row:nth-child(odd):not(.netlog-row--head) { background:#F9FAFB; }
-.netlog-detail { display:flex; flex-wrap:wrap; gap:4px 8px; justify-content:flex-end; }
-.netlog-if { white-space:nowrap; }
+.netlog-detail { display:block; }
+.netlog-if { white-space:nowrap; display:block; }
 .netlog-more { white-space:nowrap; color:var(--text-sub); }
 .netlog-empty { padding:10px; text-align:center; font-size:12px; color:var(--text-sub); }
+
+/* audit styles */
+.audit-item { display:flex; align-items:center; flex-wrap:wrap; gap:2px; margin-bottom:3px; font-family: Consolas, Monaco, monospace; font-size:12px; line-height:1.4; }
+.audit-ip { color:var(--primary); font-weight:600; }
+.audit-loc { color:#6B7280; font-size:11px; margin-left:2px; font-weight:400; }
+.audit-arrow { color:#9CA3AF; margin:0 4px; }
+.audit-port { color:#111827; }
+.audit-proc { color:#B91C1C; margin-left:6px; background:#FEE2E2; padding:0 4px; border-radius:3px; font-size:11px; }
+.audit-more { font-size:11px; color:#9CA3AF; margin-top:4px; font-style:italic; }
+
 .alert-center { margin-top:8px; }
 .alert-list { display:flex; flex-direction:column; gap:8px; }
 
