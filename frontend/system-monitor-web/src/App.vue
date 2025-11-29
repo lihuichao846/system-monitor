@@ -241,7 +241,7 @@ const collapsed = ref(false)
 const active = ref('device')
 const menu = [
   { key: 'device', title: '设备监测', icon: 'M3 3h18v18H3z' },
-  { key: 'perf', title: '性能统计', icon: 'M12 2l4 7h-8l4-7z' },
+  { key: 'perf', title: '性能统计', icon: 'M12 3L21 21H3L12 3z' },
   { key: 'alert', title: '告警中心', icon: 'M12 22c5.5 0 10-4.5 10-10S17.5 2 12 2 2 6.5 2 12s4.5 10 10 10z' }
 ]
 const hasUnread = ref(false)
