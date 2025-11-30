@@ -22,6 +22,19 @@ import (
 	"github.com/shirou/gopsutil/v3/process"
 )
 
+func init() {
+	// 尝试从环境变量设置 gopsutil 的宿主机路径
+	if v := os.Getenv("HOST_PROC"); v != "" {
+		os.Setenv("HOST_PROC", v) // 确保 gopsutil 能读取到
+	}
+	if v := os.Getenv("HOST_SYS"); v != "" {
+		os.Setenv("HOST_SYS", v)
+	}
+	if v := os.Getenv("HOST_ETC"); v != "" {
+		os.Setenv("HOST_ETC", v)
+	}
+}
+
 type DashboardData struct {
 	CPU       CPUInfo       `json:"cpu"`
 	Memory    MemoryInfo    `json:"memory"`
@@ -254,6 +267,8 @@ func collect() {
 	swapStat, _ := mem.SwapMemory()
 
 	// Disk
+	// 使用 common.HostProc 获取正确的分区文件路径 (mounts)
+	// 确保 gopsutil 读取的是宿主机挂载的分区表
 	partitions, _ := disk.Partitions(true)
 	newDiskIO, _ := disk.IOCounters()
 
@@ -261,13 +276,22 @@ func collect() {
 	hostRoot := os.Getenv("HOST_ROOT")
 	var totalDiskRead, totalDiskWrite float64
 	for _, p := range partitions {
+		// 在 Docker 中，如果 partitions 读取的是宿主机的 mounts (如 /mnt/c)，
+		// 则 p.Mountpoint 可能是 /mnt/c
+		// 我们需要将其转换为容器内的路径 /hostfs/mnt/c 才能获取 Usage
+
 		if shouldIgnorePartition(p) {
 			continue
 		}
 
 		usagePath := p.Mountpoint
 		if hostRoot != "" {
-			usagePath = filepath.Join(hostRoot, p.Mountpoint)
+			// 避免双重拼接，如果 p.Mountpoint 已经是容器内路径（不太可能，除非 bind mount 传播）
+			if !strings.HasPrefix(p.Mountpoint, hostRoot) {
+				// 特殊处理：如果 mountpoint 是 /，则拼接为 /hostfs
+				// 如果 mountpoint 是 /mnt/c，则拼接为 /hostfs/mnt/c
+				usagePath = filepath.Join(hostRoot, p.Mountpoint)
+			}
 		}
 		usage, _ := disk.Usage(usagePath)
 		if usage == nil {
@@ -296,11 +320,17 @@ func collect() {
 	}
 
 	// Network
+	// 如果设置了 HOST_PROC，NetIOCounters 会读取 /host/proc/net/dev，获取宿主机流量
 	newNet := netSliceToMap()
 
 	var nets []NetworkInfo
 	var totalRx, totalTx float64
 	for name, cur := range newNet {
+		// 过滤掉 docker, veth, br-, lo 等虚拟网卡
+		if name == "lo" || strings.HasPrefix(name, "docker") || strings.HasPrefix(name, "veth") || strings.HasPrefix(name, "br-") {
+			continue
+		}
+
 		if old, ok := lastNetIO[name]; ok {
 			rx := float64(cur.BytesRecv-old.BytesRecv) / 1024 / delta
 			tx := float64(cur.BytesSent-old.BytesSent) / 1024 / delta

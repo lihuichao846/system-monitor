@@ -6,9 +6,12 @@ services:
       context: ./backend
     container_name: system-monitor-backend
     restart: unless-stopped
-    network_mode: host
-    pid: host
-    privileged: true
+    ports:
+      - "8080:8080"
+    # Linux 环境下建议开启 host 模式以获取更准确的监控数据
+    # network_mode: host
+    # pid: host
+    # privileged: true
     volumes:
       - /:/hostfs:ro
       - /proc:/host/proc:ro
@@ -21,13 +24,19 @@ services:
       - HOST_ROOT=/hostfs
       - HOST_HOSTNAME=${COMPUTERNAME:-${HOSTNAME}}
       - HOST_OS=${OS}
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/api/dashboard"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   frontend:
     build:
       context: ./frontend/system-monitor-web
     container_name: system-monitor-frontend
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: unless-stopped
     ports:
       - "80:80"

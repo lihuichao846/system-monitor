@@ -1,13 +1,13 @@
 # System Monitor & Security Awareness Dashboard
 
-面向服务器 / 工作站的实时监控与网络安全态势感知仪表盘。后端使用 **Go + Gin + gopsutil** 采集系统指标及网络连接信息，前端采用 **Vue 3 + Vite + Element Plus + ECharts** 渲染动态大屏，支持 Docker Compose 一键部署。
+面向服务器 / 工作站的实时监控与网络安全态势感知仪表盘。后端使用 **Go + Gin + gopsutil** 采集系统指标及网络连接信息，前端采用 **Vue 3 + Vite + Element Plus + ECharts** 渲染动态大屏。
 
 ## 功能亮点
 
 - **全方位实时采集**：
   - 基础资源：CPU、内存、磁盘 I/O、**磁盘分区详情 (已用/总量/使用率)**。
   - 网络流量：实时上下行速率、总流量统计。
-  - **多平台支持**：兼容 Linux 与 Windows 系统，自动过滤系统/虚拟分区。
+  - **多平台支持**：完美支持 Windows、Linux、macOS。
 - **安全态势**：
   - **深度审计**：实时关联活跃连接的 **进程名称**、**远程 IP**、**地理位置** (国家/城市) 及端口信息。
   - **威胁感知**：流量突发或定时触发连接快照，有效捕获潜在的恶意通信（如 C2 心跳）。
@@ -23,23 +23,10 @@
   - 趋势图表：ECharts 绘制流量趋势、负载变化。
   - **地理视图**：全球地图热力分布，直观展示外部连接活跃区域。
 
-## 项目结构
+## 部署建议
 
-```
-.
-├─backend/                 # Go 后端（Gin + gopsutil + GeoIP2）
-│  ├─main.go               # 入口：提供 REST API 及 SSE 流
-│  ├─metrics/              # 指标采集与告警逻辑
-│  ├─GeoLite2-City.mmdb    # (需自行下载) MaxMind GeoIP 数据库
-│  └─Dockerfile            # 多阶段构建
-├─frontend/
-│  └─system-monitor-web/   # Vue 3 + Vite 前端
-│     ├─src/               # 前端源码 (App.vue, components, assets)
-│     ├─Dockerfile         # Node 构建 + Nginx 托管
-│     └─nginx.conf         # 生产环境反向代理配置
-├─docker-compose.yml       # 前后端一键编排
-└─deploy.sh                # 自动化更新部署脚本
-```
+**推荐使用本地直接运行的方式**，尤其是 Windows 环境。
+由于 Docker 的隔离机制，容器内无法直接读取 Windows 宿主机的物理 CPU/内存使用率（只能读取 Docker 虚拟机的资源），且网络流量监控也会受限于虚拟网卡。**本地运行可获得最准确、无损的硬件监控体验。**
 
 ## 快速开始
 
@@ -51,63 +38,41 @@
    # 在 backend 目录下执行
    curl -L -o GeoLite2-City.mmdb "https://raw.githubusercontent.com/P3TERX/GeoLite.mmdb/download/GeoLite2-City.mmdb"
    ```
-3. 将 `.mmdb` 文件放置在 `backend/` 目录下，或在运行时通过环境变量指定路径。
+3. 将 `.mmdb` 文件放置在 `backend/` 目录下。
 
-### 2. 本地开发
+### 2. 启动服务 (推荐)
 
-#### 后端启动
+#### 第一步：启动后端
 ```bash
 cd backend
 # 安装依赖
 go mod download
-# 设置环境变量（可选，默认值如下）
-export GEOIP_DB_PATH="./GeoLite2-City.mmdb"
-export ALERT_CPU_WARN=80
-export ALERT_MEM_WARN=90
-# 运行
+# 运行服务
 go run .
 ```
 后端默认监听 `:8080`。
 
-#### 前端启动
+#### 第二步：启动前端
 ```bash
 cd frontend/system-monitor-web
 npm install
 npm run dev
 ```
-前端默认访问 `http://localhost:5173`。开发环境下 `vite.config.js` 已配置代理，将 `/api` 请求转发至本地后端。
+访问终端输出的地址（通常为 `http://localhost:5173`）。开发环境下 `vite.config.js` 已配置代理，将 `/api` 请求转发至本地后端。
 
-### 3. Docker / Compose 部署 (推荐)
+### 3. Docker 部署 (仅限 Linux 服务器)
 
-本项目已针对 Docker 环境进行了深度优化，支持**读取宿主机真实指标**（而非容器内的虚拟指标）。
-
-#### 部署方式
-根目录提供 `deploy.sh` 脚本，一键执行停止旧容器、清理镜像、重新构建并启动：
+如果您是在 Linux 服务器上部署，Docker 也是一个不错的选择。请使用 `host` 网络模式以获取准确指标。
 
 ```bash
-# Windows (PowerShell/Git Bash) 或 Linux
 ./deploy.sh
 ```
-
-或者手动执行：
-
+或
 ```bash
 docker compose up -d --build
 ```
 
-#### 访问
-部署完成后，访问 `http://localhost` 或服务器 IP 即可查看仪表盘。
-
-#### 宿主机监控原理
-为了在 Docker 中监控宿主机：
-- **后端容器**：配置为 `network_mode: host` (Linux) 或挂载 `/proc`, `/sys` 等目录 (Windows/Linux)，并开启 `privileged: true` 和 `pid: host`。
-- **前端容器**：使用 `bridge` 模式，并通过端口映射暴露服务。
-
-> **注意**：在 Windows/Mac Docker Desktop 环境下，CPU/内存/网络指标反映的是承载 Docker 的虚拟机（Linux VM）的资源使用情况，磁盘指标通过挂载可正确反映宿主机磁盘。
-
 ## 配置说明 (环境变量)
-
-支持通过环境变量调整系统行为（`docker-compose.yml` 中已预置了宿主机映射配置）：
 
 | 变量名 | 默认值 | 说明 |
 | :--- | :--- | :--- |
@@ -115,22 +80,8 @@ docker compose up -d --build
 | `GEOIP_DB_PATH` | `./GeoLite2-City.mmdb` | GeoIP 数据库文件路径 |
 | `ALERT_CPU_WARN` | `80` | CPU 告警阈值 (%) |
 | `ALERT_MEM_WARN` | `90` | 内存告警阈值 (%) |
-| `HOST_PROC` | `/host/proc` | 宿主机 /proc 挂载路径 (Docker 必需) |
-| `HOST_SYS` | `/host/sys` | 宿主机 /sys 挂载路径 (Docker 必需) |
-| `HOST_ROOT` | `/hostfs` | 宿主机根目录挂载路径 (用于磁盘监控) |
-| `HOST_HOSTNAME` | - | 强制指定主机名 (Docker 中显示宿主机名) |
-| `HOST_OS` | - | 强制指定操作系统名称 |
-
-## API 接口
-
-| 方法 | 路径 | 描述 |
-| :--- | :--- | :--- |
-| **GET** | `/api/stream` | **SSE** 实时数据流，推送完整监控数据 |
-| **GET** | `/api/dashboard` | 获取当前快照数据 (JSON) |
-| **GET** | `/api/alerts` | 获取分页告警历史 (Query: `limit`, `offset`) |
 
 ## 技术栈
 
 - **Backend**: Go, Gin, gopsutil, geoip2-golang
 - **Frontend**: Vue 3, Vite, Element Plus, ECharts 5, Axios
-- **Deployment**: Docker, Docker Compose, Nginx
