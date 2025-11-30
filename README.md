@@ -5,16 +5,17 @@
 ## 功能亮点
 
 - **全方位实时采集**：
-  - 基础资源：CPU、内存、磁盘 I/O、文件系统使用率。
+  - 基础资源：CPU、内存、磁盘 I/O、**磁盘分区详情 (已用/总量/使用率)**。
   - 网络流量：实时上下行速率、总流量统计。
-  - **安全态势**：
-    - **深度审计**：实时关联活跃连接的 **进程名称**、**远程 IP**、**地理位置** (国家/城市) 及端口信息。
-    - **威胁感知**：流量突发或定时触发连接快照，有效捕获潜在的恶意通信（如 C2 心跳）。
-    - **可视化热力图**：通过 **GeoIP** 绘制全球连接热力分布，直观定位威胁来源。
+  - **多平台支持**：兼容 Linux 与 Windows 系统，自动过滤系统/虚拟分区。
+- **安全态势**：
+  - **深度审计**：实时关联活跃连接的 **进程名称**、**远程 IP**、**地理位置** (国家/城市) 及端口信息。
+  - **威胁感知**：流量突发或定时触发连接快照，有效捕获潜在的恶意通信（如 C2 心跳）。
+  - **可视化热力图**：通过 **GeoIP** 绘制全球连接热力分布，直观定位威胁来源。
   - 进程监控：Top CPU/Memory 进程实时追踪。
 - **实时数据流 (SSE)**：采用 Server-Sent Events (SSE) 技术，实现秒级数据推送，告别传统轮询，降低延迟。
 - **智能告警工作台**：
-  - 可配置的 CPU/内存/磁盘 阈值。
+  - 可配置的 CPU/内存 阈值。
   - 告警历史记录与分页查询。
   - **网络审计日志**：详细记录异常流量时刻的连接快照。
 - **可视化大屏**：
@@ -60,9 +61,8 @@ cd backend
 go mod download
 # 设置环境变量（可选，默认值如下）
 export GEOIP_DB_PATH="./GeoLite2-City.mmdb"
-export ALERT_CPU_THRESHOLD=80
-export ALERT_MEM_THRESHOLD=80
-export ALERT_DISK_THRESHOLD=90
+export ALERT_CPU_WARN=80
+export ALERT_MEM_WARN=90
 # 运行
 go run .
 ```
@@ -100,9 +100,8 @@ docker compose logs -f
 | :--- | :--- | :--- |
 | `PORT` | `8080` | 后端服务端口 |
 | `GEOIP_DB_PATH` | `./GeoLite2-City.mmdb` | GeoIP 数据库文件路径 |
-| `ALERT_CPU_THRESHOLD` | `80` | CPU 告警阈值 (%) |
-| `ALERT_MEM_THRESHOLD` | `80` | 内存告警阈值 (%) |
-| `ALERT_DISK_THRESHOLD` | `90` | 磁盘告警阈值 (%) |
+| `ALERT_CPU_WARN` | `80` | CPU 告警阈值 (%) |
+| `ALERT_MEM_WARN` | `90` | 内存告警阈值 (%) |
 
 ## API 接口
 
@@ -110,7 +109,7 @@ docker compose logs -f
 | :--- | :--- | :--- |
 | **GET** | `/api/stream` | **SSE** 实时数据流，推送完整监控数据 |
 | **GET** | `/api/dashboard` | 获取当前快照数据 (JSON) |
-| **GET** | `/api/alerts` | 获取分页告警历史 (Query: `page`, `size`) |
+| **GET** | `/api/alerts` | 获取分页告警历史 (Query: `limit`, `offset`) |
 
 ## 技术栈
 
