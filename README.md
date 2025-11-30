@@ -43,8 +43,13 @@
 
 ### 1. 准备 GeoIP 数据库 (必需)
 本项目使用 MaxMind GeoLite2 数据库进行 IP 地理定位。
-1. 访问 [MaxMind 官网](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data) 注册并下载 `GeoLite2-City.mmdb`。
-2. 将 `.mmdb` 文件放置在 `backend/` 目录下，或在运行时通过环境变量指定路径。
+1. **官方渠道**：访问 [MaxMind 官网](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data) 注册并下载 `GeoLite2-City.mmdb`。
+2. **备用镜像**（如无法访问官网）：可使用开源社区维护的镜像下载：
+   ```bash
+   # 在 backend 目录下执行
+   curl -L -o GeoLite2-City.mmdb "https://raw.githubusercontent.com/P3TERX/GeoLite.mmdb/download/GeoLite2-City.mmdb"
+   ```
+3. 将 `.mmdb` 文件放置在 `backend/` 目录下，或在运行时通过环境变量指定路径。
 
 ### 2. 本地开发
 
