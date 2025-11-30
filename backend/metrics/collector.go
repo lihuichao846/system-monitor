@@ -3,6 +3,7 @@ package metrics
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -199,14 +200,52 @@ func netSliceToMap() map[string]net.IOCountersStat {
 	return m
 }
 
+func shouldIgnorePartition(p disk.PartitionStat) bool {
+	if runtime.GOOS == "windows" {
+		// Windows 下只显示盘符（如 "C:", "D:"）
+		// 排除 WSL 挂载点或其他非盘符路径
+		return !strings.Contains(p.Device, ":")
+	}
+
+	// Linux/Unix 过滤
+	if strings.HasPrefix(p.Mountpoint, "/proc") ||
+		strings.HasPrefix(p.Mountpoint, "/sys") ||
+		strings.HasPrefix(p.Mountpoint, "/dev") ||
+		strings.HasPrefix(p.Mountpoint, "/run") ||
+		strings.HasPrefix(p.Mountpoint, "/boot") ||
+		strings.HasPrefix(p.Mountpoint, "/snap") ||
+		strings.Contains(p.Mountpoint, "/docker") ||
+		strings.Contains(p.Mountpoint, "/kubelet") {
+		return true
+	}
+	if p.Fstype == "tmpfs" || p.Fstype == "overlay" || p.Fstype == "squashfs" || p.Fstype == "autofs" || p.Fstype == "devtmpfs" {
+		return true
+	}
+	return false
+}
+
 func collect() {
+	// debug logging
+	// fmt.Println("Start collect...")
 	now := time.Now()
 	delta := now.Sub(lastTime).Seconds()
+	if delta <= 0 {
+		delta = 1
+	}
 
 	// CPU
-	perCore, _ := cpu.Percent(0, true)
-	totalCPU, _ := cpu.Percent(0, false)
-	cpuInfo, _ := cpu.Info()
+	perCore, err := cpu.Percent(0, true)
+	if err != nil {
+		fmt.Println("Error cpu.Percent perCore:", err)
+	}
+	totalCPU, err := cpu.Percent(0, false)
+	if err != nil {
+		fmt.Println("Error cpu.Percent total:", err)
+	}
+	cpuInfo, err := cpu.Info()
+	if err != nil {
+		fmt.Println("Error cpu.Info:", err)
+	}
 	loadAvg, _ := load.Avg()
 
 	// Memory
@@ -220,13 +259,20 @@ func collect() {
 	var disks []DiskInfo
 	var totalDiskRead, totalDiskWrite float64
 	for _, p := range partitions {
+		if shouldIgnorePartition(p) {
+			continue
+		}
 		usage, _ := disk.Usage(p.Mountpoint)
+		if usage == nil {
+			continue
+		}
 
 		var rSpeed, wSpeed float64
 		if old, ok := lastDiskIO[p.Device]; ok {
-			cur := newDiskIO[p.Device]
-			rSpeed = float64(cur.ReadBytes-old.ReadBytes) / 1024 / delta
-			wSpeed = float64(cur.WriteBytes-old.WriteBytes) / 1024 / delta
+			if cur, ok := newDiskIO[p.Device]; ok {
+				rSpeed = float64(cur.ReadBytes-old.ReadBytes) / 1024 / delta
+				wSpeed = float64(cur.WriteBytes-old.WriteBytes) / 1024 / delta
+			}
 		}
 
 		totalDiskRead += rSpeed
@@ -264,7 +310,7 @@ func collect() {
 	// System
 	hostStat, _ := host.Info()
 
-	// Sensors / temperature (best-effort, 部分平台可能不支持)
+	// Sensors
 	var cpuTemp float64
 	if temps, err := host.SensorsTemperatures(); err == nil {
 		for _, t := range temps {
@@ -277,8 +323,13 @@ func collect() {
 	}
 
 	// Perf summary
+	usageVal := 0.0
+	if len(totalCPU) > 0 {
+		usageVal = totalCPU[0]
+	}
+
 	perf := PerfInfo{
-		CPUUsage:       totalCPU[0],
+		CPUUsage:       usageVal,
 		Load1:          loadAvg.Load1,
 		Load5:          loadAvg.Load5,
 		Load15:         loadAvg.Load15,
@@ -292,7 +343,7 @@ func collect() {
 		CPUTemp:        cpuTemp,
 	}
 
-	// Alerts (current snapshot)
+	// Alerts
 	var alerts []AlertInfo
 	if perf.CPUUsage > cfg.CPUWarn {
 		alerts = append(alerts, AlertInfo{
@@ -309,7 +360,6 @@ func collect() {
 		})
 	}
 
-	// append to alert log (simple in-memory ring, 保留最近 200 条)
 	if len(alerts) > 0 {
 		alertLog = append(alertLog, alerts...)
 		if len(alertLog) > 200 {
@@ -317,7 +367,7 @@ func collect() {
 		}
 	}
 
-	// append to net log: 流量 > 100KB/s 或 每 10 秒强制检查一次活跃连接
+	// NetLog
 	logCounter++
 	shouldLog := false
 	if totalRx+totalTx > 100 {
@@ -330,7 +380,6 @@ func collect() {
 
 	if shouldLog {
 		auditConns := collectAuditConnections()
-		// 只有当确实有外部连接 或 流量确实大时才记录
 		if len(auditConns) > 0 || totalRx+totalTx > 100 {
 			netLog = append(netLog, NetLogEntry{
 				Time:        now.Format("15:04:05"),
@@ -352,16 +401,31 @@ func collect() {
 
 	// Update global data
 	Mu.Lock()
+
+	cores := 0
+	modelName := ""
+	mhz := 0.0
+	if len(perCore) > 0 {
+		cores = len(perCore)
+	}
+	if len(cpuInfo) > 0 {
+		modelName = cpuInfo[0].ModelName
+		mhz = cpuInfo[0].Mhz
+	} else if cores > 0 {
+		// fallback if cpuInfo fails but perCore works
+		modelName = "Unknown CPU"
+	}
+
 	Latest = DashboardData{
 		CPU: CPUInfo{
-			Usage:     totalCPU[0],
+			Usage:     usageVal,
 			PerCore:   perCore,
 			Load1:     loadAvg.Load1,
 			Load5:     loadAvg.Load5,
 			Load15:    loadAvg.Load15,
-			Cores:     len(perCore),
-			ModelName: cpuInfo[0].ModelName,
-			Mhz:       cpuInfo[0].Mhz,
+			Cores:     cores,
+			ModelName: modelName,
+			Mhz:       mhz,
 		},
 		Memory: MemoryInfo{
 			Total:       memStat.Total,
@@ -386,6 +450,7 @@ func collect() {
 	lastNetIO = newNet
 	lastDiskIO = newDiskIO
 	lastTime = now
+	// fmt.Println("End collect")
 }
 
 func GetAlerts(limit, offset int) ([]AlertInfo, int) {

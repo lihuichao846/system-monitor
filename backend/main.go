@@ -18,6 +18,8 @@ func main() {
 
 	// 提供前端请求的 API
 	r.GET("/api/dashboard", func(c *gin.Context) {
+		c.Writer.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		metrics.Mu.RLock()
 		data := metrics.Latest
 		metrics.Mu.RUnlock()

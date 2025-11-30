@@ -100,7 +100,7 @@
                 </div>
                 <div class="perf-main-metric">
                   <div class="perf-metric-label">使用率</div>
-                  <div class="perf-metric-value">{{ formatSig(dashboard.cpu.usage) }}%</div>
+                  <div class="perf-metric-value">{{ formatFixed(dashboard.cpu.usage, 1) }}%</div>
                   <div class="perf-progress-bg">
                     <div class="perf-progress-fill" :style="{ width: Math.min(dashboard.cpu.usage || 0, 100) + '%', background: statusColor(dashboard.cpu.usage > 80 ? 'err' : (dashboard.cpu.usage > 60 ? 'warn' : 'ok')) }"></div>
                   </div>
@@ -120,14 +120,14 @@
                 </div>
                 <div class="perf-main-metric">
                   <div class="perf-metric-label">内存使用率</div>
-                  <div class="perf-metric-value">{{ formatSig(dashboard.memory.used_percent) }}%</div>
+                  <div class="perf-metric-value">{{ formatFixed(dashboard.memory.used_percent, 1) }}%</div>
                   <div class="perf-progress-bg">
                     <div class="perf-progress-fill" :style="{ width: Math.min(dashboard.memory.used_percent || 0, 100) + '%', background: statusColor(dashboard.memory.used_percent > 85 ? 'err' : (dashboard.memory.used_percent > 70 ? 'warn' : 'ok')) }"></div>
                   </div>
                 </div>
                 <div class="perf-sub-rows">
-                  <div class="perf-row"><span>物理内存</span><strong>{{ formatSig(dashboard.memory.used / 1024 / 1024 / 1024) }} / {{ formatSig(dashboard.memory.total / 1024 / 1024 / 1024) }} GB</strong></div>
-                  <div class="perf-row"><span>Swap</span><strong>{{ formatSig(dashboard.perf ? dashboard.perf.swap_used / 1024 / 1024 / 1024 : 0) }} / {{ formatSig(dashboard.perf ? dashboard.perf.swap_total / 1024 / 1024 / 1024 : 0) }} GB</strong></div>
+                  <div class="perf-row"><span>物理内存</span><strong>{{ formatFixed(dashboard.memory.used / 1024 / 1024 / 1024, 1) }} / {{ formatFixed(dashboard.memory.total / 1024 / 1024 / 1024, 1) }} GB</strong></div>
+                  <div class="perf-row"><span>Swap</span><strong>{{ formatFixed(dashboard.perf ? dashboard.perf.swap_used / 1024 / 1024 / 1024 : 0, 1) }} / {{ formatFixed(dashboard.perf ? dashboard.perf.swap_total / 1024 / 1024 / 1024 : 0, 1) }} GB</strong></div>
                 </div>
               </div>
 
@@ -135,7 +135,7 @@
               <div class="perf-block">
                 <div class="perf-block-header">
                   <svg class="perf-icon" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zM7 12c0 2.76 2.24 5 5 5s5-2.24 5-5-2.24-5-5-5-5 2.24-5 5z" fill="currentColor"/></svg>
-                  <h4>磁盘 IO</h4>
+                  <h4>磁盘状态</h4>
                 </div>
                 <div class="perf-main-metric">
                    <div class="perf-metric-label">读 / 写 速率</div>
@@ -146,6 +146,20 @@
                    <div class="perf-metric-value" style="font-size:20px">
                      <span>W: {{ dashboard.perf ? formatSig(dashboard.perf.disk_write_kbps) : '-' }}</span>
                      <span style="font-size:14px;color:var(--text-sub)"> KB/s</span>
+                   </div>
+                </div>
+                <div class="perf-sub-rows">
+                   <div class="perf-row" v-for="(d, i) in (dashboard.disk || []).slice(0, 3)" :key="i">
+                     <span :title="d.path">{{ d.path }}</span>
+                     <div style="text-align:right">
+                       <strong>{{ formatFixed(d.used_percent, 1) }}%</strong>
+                       <div style="font-size:11px;color:var(--text-sub)">
+                         {{ formatFixed(d.used/1024/1024/1024, 1) }} / {{ formatFixed(d.total/1024/1024/1024, 1) }} GB
+                       </div>
+                     </div>
+                   </div>
+                   <div v-if="(dashboard.disk || []).length > 3" class="perf-row" style="justify-content:center;font-size:11px;">
+                     ... 共 {{ dashboard.disk.length }} 个分区
                    </div>
                 </div>
               </div>
@@ -357,6 +371,12 @@ const flowChartRef = ref(null)
 const geoMap = ref(null)
 let pollTimerId = null
 let sse = null
+
+// helper: format to fixed decimals
+function formatFixed(v, d = 1) {
+  if (v === null || v === undefined || Number.isNaN(Number(v))) return '-'
+  return Number(v).toFixed(d)
+}
 
 // helper: format to 2 significant digits (returns string)
 function formatSig(v) {
