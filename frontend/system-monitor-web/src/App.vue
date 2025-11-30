@@ -92,46 +92,80 @@
           <section class="perf-section card">
             <div class="perf-title">性能统计</div>
             <div class="perf-grid">
+              <!-- CPU Block -->
               <div class="perf-block">
-                <h4>CPU</h4>
-                <div class="perf-row"><span>使用率</span><strong>{{ formatSig(dashboard.cpu.usage) }}%</strong></div>
-                <div class="perf-row"><span>1 / 5 / 15 分钟负载</span>
-                  <strong>{{ formatSig(dashboard.cpu.load1) }} / {{ formatSig(dashboard.cpu.load5) }} / {{ formatSig(dashboard.cpu.load15) }}</strong>
+                <div class="perf-block-header">
+                  <svg class="perf-icon" viewBox="0 0 24 24"><path d="M6 2h12v2H6V2zm0 18h12v2H6v-2zm14-6V8h2v6h-2zm-18 0V8H0v6h2zm4-8h8v12H6V6zm2 2v8h4V8H8z" fill="currentColor"/></svg>
+                  <h4>CPU</h4>
                 </div>
-                <div class="perf-row"><span>核心数</span><strong>{{ dashboard.cpu.cores || '-' }}</strong></div>
-                <div class="perf-row"><span>温度</span>
-                  <strong>{{ dashboard.perf && dashboard.perf.cpu_temp ? formatSig(dashboard.perf.cpu_temp) + ' °C' : '-' }}</strong>
+                <div class="perf-main-metric">
+                  <div class="perf-metric-label">使用率</div>
+                  <div class="perf-metric-value">{{ formatSig(dashboard.cpu.usage) }}%</div>
+                  <div class="perf-progress-bg">
+                    <div class="perf-progress-fill" :style="{ width: Math.min(dashboard.cpu.usage || 0, 100) + '%', background: statusColor(dashboard.cpu.usage > 80 ? 'err' : (dashboard.cpu.usage > 60 ? 'warn' : 'ok')) }"></div>
+                  </div>
+                </div>
+                <div class="perf-sub-rows">
+                  <div class="perf-row"><span>负载 (1/5/15)</span><strong>{{ formatSig(dashboard.cpu.load1) }} / {{ formatSig(dashboard.cpu.load5) }} / {{ formatSig(dashboard.cpu.load15) }}</strong></div>
+                  <div class="perf-row"><span>核心数</span><strong>{{ dashboard.cpu.cores || '-' }}</strong></div>
+                  <div class="perf-row"><span>温度</span><strong>{{ dashboard.perf && dashboard.perf.cpu_temp ? formatSig(dashboard.perf.cpu_temp) + ' °C' : '-' }}</strong></div>
                 </div>
               </div>
 
+              <!-- Memory Block -->
               <div class="perf-block">
-                <h4>内存与交换</h4>
-                <div class="perf-row"><span>内存使用率</span><strong>{{ formatSig(dashboard.memory.used_percent) }}%</strong></div>
-                <div class="perf-row"><span>已用 / 总计</span>
-                  <strong>{{ formatSig(dashboard.memory.used / 1024 / 1024 / 1024) }} / {{ formatSig(dashboard.memory.total / 1024 / 1024 / 1024) }} GB</strong>
+                <div class="perf-block-header">
+                  <svg class="perf-icon" viewBox="0 0 24 24"><path d="M2 4v16h20V4H2zm2 2h16v2H4V6zm0 4h16v2H4v-2zm0 4h16v2H4v-2zm0 4h16v2H4v-2z" fill="currentColor"/></svg>
+                  <h4>内存与交换</h4>
                 </div>
-                <div class="perf-row"><span>Swap 已用 / 总计</span>
-                  <strong>{{ formatSig(dashboard.perf ? dashboard.perf.swap_used / 1024 / 1024 / 1024 : 0) }} / {{ formatSig(dashboard.perf ? dashboard.perf.swap_total / 1024 / 1024 / 1024 : 0) }} GB</strong>
+                <div class="perf-main-metric">
+                  <div class="perf-metric-label">内存使用率</div>
+                  <div class="perf-metric-value">{{ formatSig(dashboard.memory.used_percent) }}%</div>
+                  <div class="perf-progress-bg">
+                    <div class="perf-progress-fill" :style="{ width: Math.min(dashboard.memory.used_percent || 0, 100) + '%', background: statusColor(dashboard.memory.used_percent > 85 ? 'err' : (dashboard.memory.used_percent > 70 ? 'warn' : 'ok')) }"></div>
+                  </div>
+                </div>
+                <div class="perf-sub-rows">
+                  <div class="perf-row"><span>物理内存</span><strong>{{ formatSig(dashboard.memory.used / 1024 / 1024 / 1024) }} / {{ formatSig(dashboard.memory.total / 1024 / 1024 / 1024) }} GB</strong></div>
+                  <div class="perf-row"><span>Swap</span><strong>{{ formatSig(dashboard.perf ? dashboard.perf.swap_used / 1024 / 1024 / 1024 : 0) }} / {{ formatSig(dashboard.perf ? dashboard.perf.swap_total / 1024 / 1024 / 1024 : 0) }} GB</strong></div>
                 </div>
               </div>
 
+              <!-- Disk Block -->
               <div class="perf-block">
-                <h4>磁盘 IO</h4>
-                <div class="perf-row"><span>总读速</span>
-                  <strong>{{ dashboard.perf ? formatSig(dashboard.perf.disk_read_kbps) : '-' }} KB/s</strong>
+                <div class="perf-block-header">
+                  <svg class="perf-icon" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zM7 12c0 2.76 2.24 5 5 5s5-2.24 5-5-2.24-5-5-5-5 2.24-5 5z" fill="currentColor"/></svg>
+                  <h4>磁盘 IO</h4>
                 </div>
-                <div class="perf-row"><span>总写速</span>
-                  <strong>{{ dashboard.perf ? formatSig(dashboard.perf.disk_write_kbps) : '-' }} KB/s</strong>
+                <div class="perf-main-metric">
+                   <div class="perf-metric-label">读 / 写 速率</div>
+                   <div class="perf-metric-value" style="font-size:20px">
+                     <span>R: {{ dashboard.perf ? formatSig(dashboard.perf.disk_read_kbps) : '-' }}</span>
+                     <span style="font-size:14px;color:var(--text-sub)"> KB/s</span>
+                   </div>
+                   <div class="perf-metric-value" style="font-size:20px">
+                     <span>W: {{ dashboard.perf ? formatSig(dashboard.perf.disk_write_kbps) : '-' }}</span>
+                     <span style="font-size:14px;color:var(--text-sub)"> KB/s</span>
+                   </div>
                 </div>
               </div>
 
+              <!-- Network Block -->
               <div class="perf-block">
-                <h4>网络</h4>
-                <div class="perf-row"><span>总下行</span>
-                  <strong>{{ dashboard.perf ? formatSig(dashboard.perf.net_rx_kbps) : '-' }} KB/s</strong>
+                <div class="perf-block-header">
+                  <svg class="perf-icon" viewBox="0 0 24 24"><path d="M12 2a9 9 0 0 0-9 9c0 4.97 4.03 9 9 9s9-4.03 9-9a9 9 0 0 0-9-9zm0 16c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7zm-1-2h2v2h-2v-2zm0-10h2v6h-2V6z" fill="currentColor"/></svg>
+                  <h4>网络</h4>
                 </div>
-                <div class="perf-row"><span>总上行</span>
-                  <strong>{{ dashboard.perf ? formatSig(dashboard.perf.net_tx_kbps) : '-' }} KB/s</strong>
+                <div class="perf-main-metric">
+                   <div class="perf-metric-label">上行 / 下行 速率</div>
+                   <div class="perf-metric-value" style="font-size:20px">
+                     <span style="color:#10B981">↓ {{ dashboard.perf ? formatSig(dashboard.perf.net_rx_kbps) : '-' }}</span>
+                     <span style="font-size:14px;color:var(--text-sub)"> KB/s</span>
+                   </div>
+                   <div class="perf-metric-value" style="font-size:20px">
+                     <span style="color:#3B82F6">↑ {{ dashboard.perf ? formatSig(dashboard.perf.net_tx_kbps) : '-' }}</span>
+                     <span style="font-size:14px;color:var(--text-sub)"> KB/s</span>
+                   </div>
                 </div>
               </div>
             </div>
@@ -1031,11 +1065,37 @@ watch(active, async (val) => {
 /* perf & alert center */
 .perf-section { margin-top:8px; }
 .perf-title { font-weight:600; font-size:16px; margin-bottom:12px; color:var(--text-main); }
-.perf-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:16px; }
-.perf-block { padding:8px 4px; }
-.perf-block h4 { margin:0 0 8px; font-size:14px; color:var(--text-main); }
-.perf-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; font-size:13px; color:var(--text-sub); }
-.perf-row strong { color:var(--text-main); }
+.perf-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); gap:20px; }
+
+.perf-block {
+  background: #F9FAFB;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+}
+.perf-block:hover {
+  background: #FFFFFF;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  border-color: var(--primary);
+  transform: translateY(-2px);
+}
+
+.perf-block-header { display:flex; align-items:center; gap:10px; margin-bottom:16px; }
+.perf-block-header h4 { margin:0; font-size:15px; font-weight:600; color:var(--text-main); }
+.perf-icon { width:20px; height:20px; color:var(--primary); opacity:0.8; }
+
+.perf-main-metric { margin-bottom:16px; flex:1; }
+.perf-metric-label { font-size:12px; color:var(--text-sub); margin-bottom:4px; }
+.perf-metric-value { font-size:24px; font-weight:700; color:var(--text-main); margin-bottom:8px; line-height:1.2; }
+.perf-progress-bg { height:6px; background:#E5E7EB; border-radius:3px; overflow:hidden; }
+.perf-progress-fill { height:100%; background:var(--primary); border-radius:3px; transition: width 0.3s ease, background 0.3s ease; }
+
+.perf-sub-rows { display:flex; flex-direction:column; gap:8px; padding-top:12px; border-top:1px dashed var(--border); }
+.perf-row { display:flex; justify-content:space-between; align-items:center; font-size:13px; color:var(--text-sub); }
+.perf-row strong { color:var(--text-main); font-weight:500; }
 .netlog-block { margin-top:16px; border-top:1px dashed var(--border); padding-top:12px; }
 .netlog-header { display:flex; justify-content:space-between; align-items:center; font-size:13px; color:var(--text-sub); margin-bottom:6px; }
 .netlog-sub { font-size:12px; }
