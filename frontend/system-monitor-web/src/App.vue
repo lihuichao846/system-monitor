@@ -466,25 +466,46 @@ function initSSE() {
   let idx = 0
   function connect() {
     try {
+      console.log('Attempting SSE connection to:', urls[idx])
       const es = new EventSource(urls[idx])
       sse = es
-      es.onopen = () => { stopPolling() }
+      
+      es.onopen = () => { 
+        console.log('SSE connection established')
+        stopPolling() 
+      }
+      
+      // Listen for named event 'dashboard'
+      es.addEventListener('dashboard', (ev) => {
+        try {
+          const payload = JSON.parse(ev.data || '{}')
+          applyDashboard(payload)
+        } catch (e) {
+          console.error('SSE parse error:', e)
+        }
+      })
+
+      // Fallback for unnamed messages
       es.onmessage = (ev) => {
         try {
           const payload = JSON.parse(ev.data || '{}')
           applyDashboard(payload)
         } catch {}
       }
-      es.onerror = () => {
+
+      es.onerror = (err) => {
+        console.log('SSE connection error, switching to polling temporarily', err)
         try { es.close() } catch {}
         sse = null
-        idx = Math.min(idx + 1, urls.length - 1)
+        // Toggle URL index for retry
+        idx = (idx + 1) % urls.length
         startPolling()
-        setTimeout(connect, 2000)
+        setTimeout(connect, 3000)
       }
-    } catch {
+    } catch (e) {
+      console.error('SSE setup failed', e)
       startPolling()
-      setTimeout(connect, 2000)
+      setTimeout(connect, 3000)
     }
   }
   connect()

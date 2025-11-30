@@ -3,6 +3,7 @@ package metrics
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -257,12 +258,18 @@ func collect() {
 	newDiskIO, _ := disk.IOCounters()
 
 	var disks []DiskInfo
+	hostRoot := os.Getenv("HOST_ROOT")
 	var totalDiskRead, totalDiskWrite float64
 	for _, p := range partitions {
 		if shouldIgnorePartition(p) {
 			continue
 		}
-		usage, _ := disk.Usage(p.Mountpoint)
+
+		usagePath := p.Mountpoint
+		if hostRoot != "" {
+			usagePath = filepath.Join(hostRoot, p.Mountpoint)
+		}
+		usage, _ := disk.Usage(usagePath)
 		if usage == nil {
 			continue
 		}
@@ -309,6 +316,13 @@ func collect() {
 
 	// System
 	hostStat, _ := host.Info()
+	// 如果在 Docker 中，尝试读取宿主机的主机名（如果通过环境变量传递）
+	if v := os.Getenv("HOST_HOSTNAME"); v != "" {
+		hostStat.Hostname = v
+	}
+	if v := os.Getenv("HOST_OS"); v != "" {
+		hostStat.OS = v
+	}
 
 	// Sensors
 	var cpuTemp float64

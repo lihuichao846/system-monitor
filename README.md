@@ -37,7 +37,8 @@
 │     ├─src/               # 前端源码 (App.vue, components, assets)
 │     ├─Dockerfile         # Node 构建 + Nginx 托管
 │     └─nginx.conf         # 生产环境反向代理配置
-└─docker-compose.yml       # 前后端一键编排
+├─docker-compose.yml       # 前后端一键编排
+└─deploy.sh                # 自动化更新部署脚本
 ```
 
 ## 快速开始
@@ -76,25 +77,37 @@ npm run dev
 ```
 前端默认访问 `http://localhost:5173`。开发环境下 `vite.config.js` 已配置代理，将 `/api` 请求转发至本地后端。
 
-### 3. Docker / Compose 部署
+### 3. Docker / Compose 部署 (推荐)
 
-根目录提供 `docker-compose.yml`，一键启动所有服务。
+本项目已针对 Docker 环境进行了深度优化，支持**读取宿主机真实指标**（而非容器内的虚拟指标）。
+
+#### 部署方式
+根目录提供 `deploy.sh` 脚本，一键执行停止旧容器、清理镜像、重新构建并启动：
 
 ```bash
-# 1. 确保 GeoLite2-City.mmdb 已放入 backend/ 目录
-
-# 2. 构建并启动
-docker compose up -d --build
-
-# 3. 查看日志
-docker compose logs -f
+# Windows (PowerShell/Git Bash) 或 Linux
+./deploy.sh
 ```
 
-访问 `http://<服务器IP>/` 即可查看仪表盘。
+或者手动执行：
+
+```bash
+docker compose up -d --build
+```
+
+#### 访问
+部署完成后，访问 `http://localhost` 或服务器 IP 即可查看仪表盘。
+
+#### 宿主机监控原理
+为了在 Docker 中监控宿主机：
+- **后端容器**：配置为 `network_mode: host` (Linux) 或挂载 `/proc`, `/sys` 等目录 (Windows/Linux)，并开启 `privileged: true` 和 `pid: host`。
+- **前端容器**：使用 `bridge` 模式，并通过端口映射暴露服务。
+
+> **注意**：在 Windows/Mac Docker Desktop 环境下，CPU/内存/网络指标反映的是承载 Docker 的虚拟机（Linux VM）的资源使用情况，磁盘指标通过挂载可正确反映宿主机磁盘。
 
 ## 配置说明 (环境变量)
 
-支持通过环境变量调整系统行为（可在 `docker-compose.yml` 或 shell 中设置）：
+支持通过环境变量调整系统行为（`docker-compose.yml` 中已预置了宿主机映射配置）：
 
 | 变量名 | 默认值 | 说明 |
 | :--- | :--- | :--- |
@@ -102,6 +115,11 @@ docker compose logs -f
 | `GEOIP_DB_PATH` | `./GeoLite2-City.mmdb` | GeoIP 数据库文件路径 |
 | `ALERT_CPU_WARN` | `80` | CPU 告警阈值 (%) |
 | `ALERT_MEM_WARN` | `90` | 内存告警阈值 (%) |
+| `HOST_PROC` | `/host/proc` | 宿主机 /proc 挂载路径 (Docker 必需) |
+| `HOST_SYS` | `/host/sys` | 宿主机 /sys 挂载路径 (Docker 必需) |
+| `HOST_ROOT` | `/hostfs` | 宿主机根目录挂载路径 (用于磁盘监控) |
+| `HOST_HOSTNAME` | - | 强制指定主机名 (Docker 中显示宿主机名) |
+| `HOST_OS` | - | 强制指定操作系统名称 |
 
 ## API 接口
 

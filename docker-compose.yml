@@ -6,8 +6,21 @@ services:
       context: ./backend
     container_name: system-monitor-backend
     restart: unless-stopped
-    ports:
-      - "8080:8080"
+    network_mode: host
+    pid: host
+    privileged: true
+    volumes:
+      - /:/hostfs:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /etc:/host/etc:ro
+    environment:
+      - HOST_PROC=/host/proc
+      - HOST_SYS=/host/sys
+      - HOST_ETC=/host/etc
+      - HOST_ROOT=/hostfs
+      - HOST_HOSTNAME=${COMPUTERNAME:-${HOSTNAME}}
+      - HOST_OS=${OS}
 
   frontend:
     build:
@@ -16,7 +29,5 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
-    environment:
-      - VITE_API_BASE=/api
     ports:
       - "80:80"
