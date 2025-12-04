@@ -89,6 +89,7 @@ type SystemInfo struct {
 	OS       string `json:"os"`
 	Platform string `json:"platform"`
 	BootTime uint64 `json:"boot_time"`
+	Procs    int    `json:"procs"` // Total processes
 }
 
 type PerfInfo struct {
@@ -180,12 +181,15 @@ func InitConfigFromEnv() {
 func InitGeo() {
 	path := os.Getenv("GEOIP_DB_PATH")
 	if path == "" {
+		fmt.Println("[WARN] GEOIP_DB_PATH is not set. Geo features disabled.")
 		return
 	}
 	r, err := geoip2.Open(path)
 	if err != nil {
+		fmt.Printf("[ERROR] Failed to open GeoIP DB at %s: %v\n", path, err)
 		return
 	}
+	fmt.Printf("[INFO] GeoIP DB loaded successfully from %s\n", path)
 	geoReader = r
 }
 
@@ -346,6 +350,7 @@ func collect() {
 
 	// System
 	hostStat, _ := host.Info()
+	procs, _ := process.Pids()
 	// 如果在 Docker 中，尝试读取宿主机的主机名（如果通过环境变量传递）
 	if v := os.Getenv("HOST_HOSTNAME"); v != "" {
 		hostStat.Hostname = v
@@ -439,8 +444,9 @@ func collect() {
 	}
 
 	var geoPoints []GeoPoint
+
 	if geoReader != nil {
-		geoPoints = collectGeoPoints()
+		geoPoints = append(geoPoints, collectGeoPoints()...)
 	}
 
 	// Update global data
@@ -481,7 +487,7 @@ func collect() {
 		},
 		Disk:      disks,
 		Network:   nets,
-		System:    SystemInfo{Hostname: hostStat.Hostname, OS: hostStat.OS, Platform: hostStat.Platform, BootTime: hostStat.BootTime},
+		System:    SystemInfo{Hostname: hostStat.Hostname, OS: hostStat.OS, Platform: hostStat.Platform, BootTime: hostStat.BootTime, Procs: len(procs)},
 		Perf:      perf,
 		Alerts:    alertLog,
 		Current:   alerts,
@@ -617,21 +623,45 @@ func collectAuditConnections() []ConnectionInfo {
 }
 
 func collectGeoPoints() []GeoPoint {
+	// [DEBUG]
+	fmt.Println("collectGeoPoints called")
 	conns, err := net.Connections("inet")
 	if err != nil {
+		fmt.Println("collectGeoPoints net.Connections error:", err)
 		return nil
 	}
 	type key struct{ lat, lon float64 }
 	agg := make(map[key]GeoPoint)
+
+	// [DEBUG]
+	fmt.Printf("Total connections found: %d\n", len(conns))
+
 	for _, c := range conns {
 		ip := c.Raddr.IP
 		if ip == "" || isPrivateIP(ip) {
 			continue
 		}
+		// [DEBUG]
+		procName := "unknown"
+		if c.Pid > 0 {
+			if p, err := process.NewProcess(c.Pid); err == nil {
+				n, _ := p.Name()
+				if n != "" {
+					procName = n
+				}
+			}
+		}
+		fmt.Printf("Processing public IP: %s (PID: %d, Process: %s)\n", ip, c.Pid, procName)
+
 		rec, err := geoReader.City(stdnet.ParseIP(ip))
 		if err != nil || rec == nil {
+			// [DEBUG]
+			fmt.Printf("Geo lookup failed for IP %s: %v\n", ip, err)
 			continue
 		}
+		// [DEBUG]
+		fmt.Printf("Geo lookup success: %s -> %s, %s\n", ip, rec.Country.Names["en"], rec.City.Names["en"])
+
 		lat := rec.Location.Latitude
 		lon := rec.Location.Longitude
 		k := key{lat: lat, lon: lon}

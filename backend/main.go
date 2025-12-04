@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
+	"system-monitor/lan"
 	"system-monitor/metrics"
 	"time"
 
@@ -35,6 +37,12 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"items": items, "total": total})
 	})
 
+	// LAN Topology
+	r.GET("/api/lan", func(c *gin.Context) {
+		data := lan.GetTopology()
+		c.JSON(http.StatusOK, data)
+	})
+
 	r.GET("/api/stream", func(c *gin.Context) {
 		c.Writer.Header().Set("Content-Type", "text/event-stream")
 		c.Writer.Header().Set("Cache-Control", "no-cache")
@@ -62,5 +70,9 @@ func main() {
 		}
 	})
 
-	r.Run(":8080") // 启动服务
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	r.Run(":" + port)
 }

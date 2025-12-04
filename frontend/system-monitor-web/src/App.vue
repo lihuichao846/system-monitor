@@ -52,13 +52,24 @@
       <el-main class="main">
         <!-- 设备监测总览 -->
         <template v-if="active === 'device'">
-          <!-- KPI row (2 items with ring charts) -->
-          <section class="kpi-row-2">
+          <!-- KPI row (3 items with ring charts) -->
+          <section class="kpi-row-2" style="grid-template-columns: repeat(3, 1fr);">
             <div class="kpi-large card" v-for="(k, i) in kpisLarge" :key="i">
               <div class="kpi-large-title">{{ k.title }}</div>
               <div class="kpi-large-body">
-                <div class="gauge" :ref="k.ref" style="width:160px;height:120px;"></div>
-                <div class="kpi-large-meta">
+                <!-- Regular Gauge for CPU/Mem -->
+                <div v-if="!k.isRaw" class="gauge" :ref="k.ref" style="width:160px;height:120px;"></div>
+                
+                <!-- Digital Card for Procs -->
+                <div v-else class="metric-card" style="width:160px;height:120px;display:flex;align-items:center;justify-content:center;flex-direction:column;padding:10px;">
+                   <div style="font-size:28px;font-weight:bold;margin-bottom:8px;" :style="{ color: k.value > 300 ? '#F53F3F' : '#165DFF' }">{{ k.value }}</div>
+                   <div style="width:100%;height:8px;background:#E5E6EB;border-radius:4px;overflow:hidden;">
+                     <div :style="{ width: Math.min((k.value / 500) * 100, 100) + '%', background: k.value > 300 ? '#F53F3F' : '#165DFF', height:'100%', transition:'width 0.3s' }"></div>
+                   </div>
+                   <div style="font-size:12px;color:#86909C;margin-top:6px;">Active Tasks</div>
+                </div>
+
+                <div class="kpi-large-meta" v-if="!k.isRaw">
                   <div class="value-big">{{ formatSig(k.value) }}%</div>
                   <div class="meta-sub">实时</div>
                 </div>
@@ -285,6 +296,36 @@
             <div ref="geoMap" style="flex:1;min-height:400px;"></div>
           </section>
         </template>
+
+        <!-- 局域网拓扑 -->
+        <template v-else-if="active === 'lan'">
+          <div class="lan-container" style="display:flex;flex-direction:column;height:100%;gap:12px;">
+            <!-- Graph -->
+            <section class="card" style="flex:1;min-height:300px;display:flex;flex-direction:column;">
+              <div class="quick-title">网络拓扑</div>
+              <div ref="lanGraphRef" style="flex:1;"></div>
+            </section>
+            
+            <!-- Table -->
+            <section class="card" style="flex:1;min-height:200px;display:flex;flex-direction:column;">
+              <div class="quick-title">局域网主机列表</div>
+              <el-table :data="lanData.hosts" style="width: 100%;flex:1;" size="small" v-loading="lanLoading">
+                <el-table-column prop="ip" label="IP 地址" width="140" />
+                <el-table-column prop="hostname" label="主机名" min-width="180">
+                  <template #default="scope">
+                    {{ scope.row.hostname || '-' }}
+                  </template>
+                </el-table-column>
+                <el-table-column prop="latency" label="延迟" width="100" />
+                <el-table-column label="状态" width="100">
+                  <template #default>
+                    <el-tag type="success" size="small">在线</el-tag>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </section>
+          </div>
+        </template>
       </el-main>
 
       <!-- Right Quick Monitor -->
@@ -312,6 +353,16 @@
             <div class="sys-row"><span>启动时间</span><strong>{{ formatBootTime(dashboard.system.boot_time) }}</strong></div>
           </div>
         </div>
+
+        <div class="quick-card card" style="margin-top:12px;">
+          <div class="quick-title">局域网概览</div>
+          <div class="sys-grid">
+            <div class="sys-row"><span>本机 IP</span><strong>{{ lanData.local_ip || '-' }}</strong></div>
+            <div class="sys-row"><span>当前子网</span><strong>{{ lanData.subnet || '-' }}</strong></div>
+            <div class="sys-row"><span>在线设备</span><strong>{{ (lanData.hosts || []).length }} 台</strong></div>
+            <div class="sys-row"><span>监控节点</span><strong>{{ (lanData.hosts || []).filter(h => h.has_monitor).length }} 个</strong></div>
+          </div>
+        </div>
       </el-aside>
     </el-container>
   </el-container>
@@ -329,7 +380,8 @@ const menu = [
   { key: 'device', title: '设备监测', icon: 'M3 3h18v18H3z' },
   { key: 'perf', title: '性能统计', icon: 'M12 3L21 21H3L12 3z' },
   { key: 'alert', title: '告警中心', icon: 'M12 22c5.5 0 10-4.5 10-10S17.5 2 12 2 2 6.5 2 12s4.5 10 10 10z' },
-  { key: 'geo', title: '地理视图', icon: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z' }
+  { key: 'geo', title: '地理视图', icon: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z' },
+  { key: 'lan', title: '局域网拓扑', icon: 'M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z' }
 ]
 const hasUnread = ref(false)
 // 告警日志 + 当前实时告警
@@ -352,7 +404,8 @@ const dashboard = reactive({
 // KPI placeholders (will be updated each fetch)
 const kpisLarge = reactive([
   { title: 'CPU 使用率', value: 0, delta: 0, ref: 'cpuGauge' },
-  { title: '内存占用', value: 0, delta: 0, ref: 'memGauge' }
+  { title: '内存占用', value: 0, delta: 0, ref: 'memGauge' },
+  { title: '系统进程数', value: 0, delta: 0, ref: 'procGauge', isRaw: true }
 ])
 
 // history arrays
@@ -362,15 +415,20 @@ const currentFlow = ref(0)
 const flowPeak = ref(0)
 
 // chart instances
-let gaugeCpu, gaugeMem, flowChart, mapChart
+let gaugeCpu, gaugeMem, gaugeProc, flowChart, mapChart
 
 // refs
 const cpuGauge = ref(null)
 const memGauge = ref(null)
+const procGauge = ref(null)
 const flowChartRef = ref(null)
 const geoMap = ref(null)
+const lanGraphRef = ref(null)
+const lanData = ref({ local_ip: '', subnet: '', hosts: [] })
+const lanLoading = ref(false)
 let pollTimerId = null
 let sse = null
+let lanChart = null
 
 // helper: format to fixed decimals
 function formatFixed(v, d = 1) {
@@ -413,7 +471,12 @@ function openAlert(a) {
 // fetch data from backend
 async function fetchData() {
   try {
-    const res = await axios.get('/api/dashboard')
+    let res
+    try {
+      res = await axios.get('/api/dashboard')
+    } catch {
+      res = await axios.get('http://localhost:8040/api/dashboard')
+    }
     const d = res.data
     applyDashboard(d)
   } catch (e) {
@@ -434,6 +497,7 @@ function applyDashboard(d) {
 
   kpisLarge[0].value = dashboard.cpu.usage || 0
   kpisLarge[1].value = dashboard.memory.used_percent || 0
+  kpisLarge[2].value = dashboard.system.procs || 0
 
   const totalNet = (dashboard.network || []).reduce((s, n) => s + (n.rx || 0) + (n.tx || 0), 0)
   const normalizedNet = Number(totalNet)
@@ -462,7 +526,7 @@ function stopPolling() {
 }
 
 function initSSE() {
-  const urls = ['/api/stream', 'http://localhost:8080/api/stream']
+  const urls = ['/api/stream', 'http://localhost:8040/api/stream']
   let idx = 0
   function connect() {
     try {
@@ -515,7 +579,12 @@ async function fetchAlertsPage() {
   try {
     const limit = alertTable.pageSize
     const offset = (alertTable.page - 1) * limit
-    const res = await axios.get('/api/alerts', { params: { limit, offset } })
+    let res
+    try {
+      res = await axios.get('/api/alerts', { params: { limit, offset } })
+    } catch {
+      res = await axios.get('http://localhost:8040/api/alerts', { params: { limit, offset } })
+    }
     const d = res.data || {}
     alertTable.items = d.items || []
     alertTable.total = d.total || 0
@@ -692,6 +761,8 @@ function initGauges() {
       ]
     })
   }
+
+  // procGauge removed from here
 }
 
 function updateGauges() {
@@ -701,6 +772,7 @@ function updateGauges() {
   if (gaugeMem) {
     gaugeMem.setOption({ series: [{ id: 'memValue', data: [{ value: Number(kpisLarge[1].value || 0) }] }] })
   }
+  // gaugeProc removed
 }
 
 function initFlowChart() {
@@ -882,6 +954,118 @@ function updateFlowChart() {
 }
 
 // 重新查找设备监测区域内的图表 DOM，并初始化图表
+async function fetchLanData() {
+  lanLoading.value = true
+  try {
+    let res
+    try {
+      res = await axios.get('/api/lan')
+    } catch {
+      res = await axios.get('http://localhost:8040/api/lan')
+    }
+    lanData.value = res.data
+    initLanGraph()
+  } catch (e) {
+    console.error('fetch lan error', e)
+  } finally {
+    lanLoading.value = false
+  }
+}
+
+function initLanGraph() {
+  if (!lanGraphRef.value) return
+  if (lanChart) {
+    lanChart.dispose()
+  }
+  lanChart = echarts.init(lanGraphRef.value)
+
+  const nodes = []
+  const links = []
+
+  // Central Node (Server)
+  nodes.push({
+    id: 'server',
+    name: 'Server\n' + (lanData.value.local_ip || '127.0.0.1'),
+    symbolSize: 50,
+    itemStyle: { color: '#165DFF' },
+    label: { show: true, position: 'bottom' },
+    category: 0
+  })
+
+  // Host Nodes
+  const hosts = lanData.value.hosts || []
+  hosts.forEach((h, idx) => {
+    // Skip if it's the server itself (though backend might filter/mark it)
+    if (h.ip === lanData.value.local_ip) return
+    
+    const isMonitor = h.has_monitor
+    nodes.push({
+      id: h.ip,
+      name: (h.hostname || h.ip) + '\n' + h.latency + (isMonitor ? '\n(Monitor)' : ''),
+      symbolSize: isMonitor ? 35 : 25,
+      itemStyle: { 
+        color: isMonitor ? '#FFAB00' : '#36D399',
+        shadowBlur: isMonitor ? 10 : 0,
+        shadowColor: isMonitor ? '#FFAB00' : 'transparent'
+      },
+      label: { show: true, position: 'bottom' },
+      category: 1,
+      // Custom data for click handler
+      monitorUrl: isMonitor ? `http://${h.ip}:8041` : null
+    })
+
+    links.push({
+      source: 'server',
+      target: h.ip
+    })
+  })
+
+  const option = {
+    title: {
+      text: '局域网拓扑',
+      subtext: `本机 IP: ${lanData.value.local_ip} | 子网: ${lanData.value.subnet} | 在线: ${hosts.length}\n橙色节点表示安装了监控服务`,
+      left: 'center'
+    },
+    tooltip: {
+      formatter: (params) => {
+        if (params.dataType === 'node' && params.data.monitorUrl) {
+          return `${params.name}<br/>Click to open dashboard`
+        }
+        return params.name
+      }
+    },
+    series: [
+      {
+        type: 'graph',
+        layout: 'force',
+        data: nodes,
+        links: links,
+        roam: true,
+        label: {
+          show: true
+        },
+        force: {
+          repulsion: 500,
+          edgeLength: [100, 200]
+        },
+        lineStyle: {
+          color: '#9ca3af',
+          curveness: 0.1
+        }
+      }
+    ]
+  }
+
+  lanChart.setOption(option)
+
+  // Add click handler
+  lanChart.on('click', function (params) {
+    if (params.dataType === 'node' && params.data.monitorUrl) {
+      window.open(params.data.monitorUrl, '_blank')
+    }
+  })
+}
+
 function setupDeviceCharts() {
   // 通过 class 查找当前 DOM 中的仪表盘容器
   const gauges = document.querySelectorAll('.kpi-large .gauge')
@@ -905,6 +1089,7 @@ onMounted(() => {
 
   // initial fetch + start polling
   fetchData()
+  fetchLanData() // Also fetch LAN data on startup for sidebar
   startPolling()
   initSSE()
 
@@ -914,6 +1099,7 @@ onMounted(() => {
     gaugeMem && gaugeMem.resize && gaugeMem.resize()
     flowChart && flowChart.resize && flowChart.resize()
     mapChart && mapChart.resize && mapChart.resize()
+    lanChart && lanChart.resize && lanChart.resize()
   })
 })
 
@@ -930,6 +1116,10 @@ watch(active, async (val) => {
   if (val === 'geo') {
     await nextTick()
     initGeoMap()
+  }
+  if (val === 'lan') {
+    await nextTick()
+    fetchLanData()
   }
 })
 </script>
