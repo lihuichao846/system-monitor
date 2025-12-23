@@ -43,24 +43,31 @@
 
 ### Windows 一键部署（推荐）
 
-1) **准备 GeoIP 数据库（可选）**：
-   若需要 IP 地图功能，请将下载好的 `GeoLite2-City.mmdb` 文件直接放入项目根目录（即与 `bootstrap.ps1` 同级）。
+本脚本专为**完全空白的 Windows 环境**设计（例如刚安装好的 Windows Server）。您无需手动安装任何语言环境，脚本会自动完成一切。
 
-2) **运行部署脚本**：
-```powershell
-cd "d:\Program Files\Go projects\system-monitor"
-Set-ExecutionPolicy Bypass -Scope Process -Force
-./bootstrap.ps1 -BackendPort 8040 -FrontendPort 8041
-```
-- **访问**：
-  - 后端：`http://localhost:8040`
-  - 前端：`http://localhost:8041`
-- **脚本功能**：
-  - 自动检测环境并安装 Git/Go/Node.js/NSSM（若缺失）。
-  - 自动构建后端为 Windows 服务 `SystemMonitorBackend`。
-  - 自动构建前端并以静态服务托管为 `SystemMonitorFrontend`。
-  - 自动检测根目录下的 `GeoLite2-City.mmdb` 并配置环境变量。
-  - 自动配置 Windows 防火墙规则允许端口访问。
+1) **准备工作**：
+   - 将本项目代码下载到目标机器（例如 `C:\system-monitor`）。
+   - **（可选）GeoIP 数据库**：若需要 IP 地图功能，将 `GeoLite2-City.mmdb` 放入项目根目录。
+
+2) **执行脚本**：
+   右键点击开始菜单，选择 **Windows PowerShell (管理员)**，然后运行：
+   ```powershell
+   cd C:\system-monitor
+   Set-ExecutionPolicy Bypass -Scope Process -Force
+   ./bootstrap.ps1 -BackendPort 8040 -FrontendPort 8041
+   ```
+
+3) **脚本会自动执行以下操作**：
+   - ✅ 自动安装包管理器 **Chocolatey**。
+   - ✅ 自动安装 **Git**, **Go (Golang)**, **Node.js**, **NSSM** (服务管理器)。
+   - ✅ 自动配置环境变量（PATH, GOPROXY 等），无需人工干预。
+   - ✅ 自动编译后端 Go 代码并注册为 Windows 服务。
+   - ✅ 自动编译前端 Vue 代码并托管为 Windows 服务。
+   - ✅ 自动配置防火墙放行端口。
+
+4) **验证访问**：
+   - 后端 API：`http://localhost:8040`
+   - 前端大屏：`http://localhost:8041`
 
 ### Linux 部署（手动构建）
 

@@ -61,9 +61,9 @@
                 <div v-if="!k.isRaw" class="gauge" :ref="k.ref" style="width:160px;height:120px;"></div>
                 
                 <!-- Digital Card for Procs -->
-                <div v-else class="metric-card" style="width:160px;height:120px;display:flex;align-items:center;justify-content:center;flex-direction:column;padding:10px;">
+                <div v-else class="metric-card" style="width:100%;height:120px;display:flex;align-items:center;justify-content:center;flex-direction:column;padding:10px;box-sizing:border-box;">
                    <div style="font-size:28px;font-weight:bold;margin-bottom:8px;" :style="{ color: k.value > 300 ? '#F53F3F' : '#165DFF' }">{{ k.value }}</div>
-                   <div style="width:100%;height:8px;background:#E5E6EB;border-radius:4px;overflow:hidden;">
+                   <div style="width:80%;height:8px;background:#E5E6EB;border-radius:4px;overflow:hidden;">
                      <div :style="{ width: Math.min((k.value / 500) * 100, 100) + '%', background: k.value > 300 ? '#F53F3F' : '#165DFF', height:'100%', transition:'width 0.3s' }"></div>
                    </div>
                    <div style="font-size:12px;color:#86909C;margin-top:6px;">Active Tasks</div>

@@ -74,19 +74,6 @@ func performScan() ScanResult {
 
 	hosts := scanSubnet(subnet, localIP)
 
-	// [MOCK] Add some fake devices for testing topology view
-	// 假设子网是 192.168.1.x，我们随机生成几个同网段 IP
-	// 如果是其他网段，这里仅作演示，IP 可能看起来不匹配，但逻辑上能通
-	baseIP := "192.168.1."
-	if parts := strings.Split(localIP, "."); len(parts) == 4 {
-		baseIP = fmt.Sprintf("%s.%s.%s.", parts[0], parts[1], parts[2])
-	}
-
-	hosts = append(hosts, Host{IP: baseIP + "55", Hostname: "iPhone-14-Pro", Latency: "25ms", HasMonitor: false})
-	hosts = append(hosts, Host{IP: baseIP + "101", Hostname: "HP-LaserJet-M102", Latency: "4ms", HasMonitor: false})
-	hosts = append(hosts, Host{IP: baseIP + "200", Hostname: "NAS-Synology", Latency: "1ms", HasMonitor: true})
-	hosts = append(hosts, Host{IP: baseIP + "88", Hostname: "Guest-Laptop", Latency: "120ms", HasMonitor: false})
-
 	return ScanResult{
 		LocalIP: localIP,
 		Subnet:  subnet,

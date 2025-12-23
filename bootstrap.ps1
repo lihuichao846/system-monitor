@@ -17,8 +17,25 @@ function Install-Choco {
 }
 
 function Install-Packages {
+  # Refresh environment variables to ensure choco is found
+  $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+  
+  Write-Host "Installing dependencies via Chocolatey..." -ForegroundColor Cyan
   choco install -y git go nodejs-lts nssm curl
-  $env:PATH += ";C:\Program Files\Go\bin;C:\Program Files\nodejs"
+  
+  # Refresh PATH again to include newly installed tools (Go, Node, etc.)
+  $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+  
+  # Explicitly add common paths if not present, just in case
+  if ($env:Path -notlike "*C:\Program Files\Go\bin*") { $env:Path += ";C:\Program Files\Go\bin" }
+  if ($env:Path -notlike "*C:\Program Files\nodejs*") { $env:Path += ";C:\Program Files\nodejs" }
+  
+  # Verify installations
+  Write-Host "Verifying installations..." -ForegroundColor Cyan
+  go version
+  node --version
+  npm --version
+  nssm version
 }
 
 function Setup-Backend {
@@ -26,6 +43,10 @@ function Setup-Backend {
   $backendDir = Join-Path $root 'backend'
   Push-Location $backendDir
   go env -w GOPATH=$env:USERPROFILE\go
+  # Ensure Go modules are enabled
+  $env:GO111MODULE = "on"
+  $env:GOPROXY = "https://goproxy.cn,direct" # Use proxy for faster download in China, optional but recommended
+  
   go mod download
   go build -o system-monitor-backend.exe .
   $svcDir = Join-Path $env:ProgramData 'SystemMonitor'
