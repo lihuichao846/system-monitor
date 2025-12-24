@@ -8,6 +8,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	gopsnet "github.com/shirou/gopsutil/v3/net"
+	"github.com/shirou/gopsutil/v3/process"
 )
 
 type Host struct {
@@ -17,10 +20,20 @@ type Host struct {
 	HasMonitor bool   `json:"has_monitor"`
 }
 
+type ProcessComm struct {
+	PID        int32  `json:"pid"`
+	Name       string `json:"name"`
+	RemoteIP   string `json:"remote_ip"`
+	RemotePort uint32 `json:"remote_port"`
+	Protocol   string `json:"protocol"`
+	Status     string `json:"status"`
+}
+
 type ScanResult struct {
-	LocalIP string `json:"local_ip"`
-	Subnet  string `json:"subnet"` // e.g. "192.168.1.0/24"
-	Hosts   []Host `json:"hosts"`
+	LocalIP  string        `json:"local_ip"`
+	Subnet   string        `json:"subnet"` // e.g. "192.168.1.0/24"
+	Hosts    []Host        `json:"hosts"`
+	LANConns []ProcessComm `json:"lan_conns"` // Connections to other LAN hosts
 }
 
 var (
@@ -73,12 +86,71 @@ func performScan() ScanResult {
 	}
 
 	hosts := scanSubnet(subnet, localIP)
+	lanConns := getLANConnections(subnet, localIP)
 
 	return ScanResult{
-		LocalIP: localIP,
-		Subnet:  subnet,
-		Hosts:   hosts,
+		LocalIP:  localIP,
+		Subnet:   subnet,
+		Hosts:    hosts,
+		LANConns: lanConns,
 	}
+}
+
+func getLANConnections(subnet string, localIP string) []ProcessComm {
+	_, ipnet, err := net.ParseCIDR(subnet)
+	if err != nil {
+		return nil
+	}
+
+	conns, err := gopsnet.Connections("inet")
+	if err != nil {
+		return nil
+	}
+
+	var comms []ProcessComm
+	procNames := make(map[int32]string)
+
+	for _, c := range conns {
+		// Only established connections
+		if c.Status != "ESTABLISHED" || c.Raddr.IP == "" {
+			continue
+		}
+
+		// Check if remote IP is in our subnet and NOT local
+		rip := net.ParseIP(c.Raddr.IP)
+		if rip == nil || !ipnet.Contains(rip) || c.Raddr.IP == localIP {
+			continue
+		}
+
+		// Get Process Name
+		name, ok := procNames[c.Pid]
+		if !ok {
+			if c.Pid > 0 {
+				if p, err := process.NewProcess(c.Pid); err == nil {
+					name, _ = p.Name()
+				}
+			}
+			if name == "" {
+				name = "unknown"
+			}
+			procNames[c.Pid] = name
+		}
+
+		proto := "TCP"
+		if c.Type == 2 {
+			proto = "UDP"
+		}
+
+		comms = append(comms, ProcessComm{
+			PID:        c.Pid,
+			Name:       name,
+			RemoteIP:   c.Raddr.IP,
+			RemotePort: c.Raddr.Port,
+			Protocol:   proto,
+			Status:     c.Status,
+		})
+	}
+	return comms
 }
 
 func getLocalIPAndSubnet() (string, string, error) {

@@ -306,10 +306,19 @@
               <div ref="lanGraphRef" style="flex:1;"></div>
             </section>
             
-            <!-- Table -->
+            <!-- Tabbed View -->
             <section class="card" style="flex:1;min-height:200px;display:flex;flex-direction:column;">
-              <div class="quick-title">局域网主机列表</div>
-              <el-table :data="lanData.hosts" style="width: 100%;flex:1;" size="small" v-loading="lanLoading">
+              <div class="tabs-header" style="display:flex;border-bottom:1px solid #e5e6eb;padding:0 16px;">
+                <div class="tab-item" :class="{ active: lanTab === 'hosts' }" @click="lanTab = 'hosts'" style="padding:12px 16px;cursor:pointer;border-bottom:2px solid transparent;color:#86909c;font-weight:500;">
+                  主机列表
+                </div>
+                <div class="tab-item" :class="{ active: lanTab === 'conns' }" @click="lanTab = 'conns'" style="padding:12px 16px;cursor:pointer;border-bottom:2px solid transparent;color:#86909c;font-weight:500;">
+                  进程通信
+                </div>
+              </div>
+
+              <!-- Hosts Tab -->
+              <el-table v-if="lanTab === 'hosts'" :data="lanData.hosts" style="width: 100%;flex:1;" size="small" v-loading="lanLoading">
                 <el-table-column prop="ip" label="IP 地址" width="140" />
                 <el-table-column prop="hostname" label="主机名" min-width="180">
                   <template #default="scope">
@@ -322,6 +331,16 @@
                     <el-tag type="success" size="small">在线</el-tag>
                   </template>
                 </el-table-column>
+              </el-table>
+
+              <!-- Conns Tab -->
+              <el-table v-if="lanTab === 'conns'" :data="lanData.lan_conns || []" style="width: 100%;flex:1;" size="small" v-loading="lanLoading" empty-text="暂无局域网通信">
+                <el-table-column prop="name" label="进程名" width="140" />
+                <el-table-column prop="pid" label="PID" width="80" />
+                <el-table-column prop="protocol" label="协议" width="70" />
+                <el-table-column prop="remote_ip" label="目标 IP" width="140" />
+                <el-table-column prop="remote_port" label="目标端口" width="90" />
+                <el-table-column prop="status" label="状态" />
               </el-table>
             </section>
           </div>
@@ -424,8 +443,9 @@ const procGauge = ref(null)
 const flowChartRef = ref(null)
 const geoMap = ref(null)
 const lanGraphRef = ref(null)
-const lanData = ref({ local_ip: '', subnet: '', hosts: [] })
+const lanData = ref({ local_ip: '', subnet: '', hosts: [], lan_conns: [] })
 const lanLoading = ref(false)
+const lanTab = ref('hosts')
 let pollTimerId = null
 let sse = null
 let lanChart = null
@@ -1137,6 +1157,14 @@ watch(active, async (val) => {
   --text-sub:#6B7280;
   --border:#E5E7EB;
   --muted: rgba(15,23,42,0.04);
+}
+
+.tab-item.active {
+  color: #165DFF !important;
+  border-bottom-color: #165DFF !important;
+}
+.tab-item:hover {
+  color: #165DFF !important;
 }
 
 /* layout */

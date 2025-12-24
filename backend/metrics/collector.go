@@ -409,6 +409,47 @@ func collect() {
 		})
 	}
 
+	// [Network Alerts]
+	// 1. Data Exfiltration Detection (High Upload)
+	// Threshold: 2 MB/s (approx 16 Mbps). Adjust based on business needs.
+	if totalTx > 2048 {
+		alerts = append(alerts, AlertInfo{
+			Level: "warn",
+			Text:  fmt.Sprintf("异常大量数据外传：%.1f MB/s", totalTx/1024),
+			Time:  now.Format("15:04:05"),
+		})
+	}
+
+	// 2. Bandwidth Saturation (Total Traffic)
+	// Threshold: 10 MB/s (approx 80 Mbps)
+	if (totalRx + totalTx) > 10240 {
+		alerts = append(alerts, AlertInfo{
+			Level: "warn",
+			Text:  fmt.Sprintf("网络带宽拥塞：%.1f MB/s", (totalRx+totalTx)/1024),
+			Time:  now.Format("15:04:05"),
+		})
+	}
+
+	// 2. High Connection Frequency from Single IP
+	// We need to scan all connections, not just audit ones
+	if allConns, err := net.Connections("inet"); err == nil {
+		ipCounts := make(map[string]int)
+		for _, c := range allConns {
+			if c.Status == "ESTABLISHED" && c.Raddr.IP != "" && !isPrivateIP(c.Raddr.IP) {
+				ipCounts[c.Raddr.IP]++
+			}
+		}
+		for ip, count := range ipCounts {
+			if count > 50 { // Threshold: 50 concurrent connections
+				alerts = append(alerts, AlertInfo{
+					Level: "critical",
+					Text:  fmt.Sprintf("疑似攻击：IP %s 建立了 %d 个连接", ip, count),
+					Time:  now.Format("15:04:05"),
+				})
+			}
+		}
+	}
+
 	if len(alerts) > 0 {
 		alertLog = append(alertLog, alerts...)
 		if len(alertLog) > 200 {
